@@ -1,112 +1,26 @@
-<!doctype html>
-<html lang="zh-CN">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#1769aa" />
-  <meta name="description" content="用于训练制冷装置开机、停机操作顺序和科目一测量题的手机练习软件" />
-
-  <title>制冷装置操作顺序练习软件</title>
-
-  <link rel="stylesheet" href="style.css?v=20260430-mobile-primary-v10" />
-  <link rel="manifest" href="manifest.webmanifest?v=20260430-mobile-primary-v10" />
-  <link rel="icon" href="icons/icon-192.png" />
-  <link rel="apple-touch-icon" href="icons/icon-192.png" />
-</head>
-<body>
-  <div class="app-shell">
-    <header class="app-header">
-      <div class="brand-row">
-        <div class="brand-icon" aria-hidden="true">❄</div>
-        <div>
-          <h1>制冷装置操作顺序练习软件</h1>
-          <p id="pageHint">请选择练习类型</p>
-        </div>
-      </div>
-    </header>
-
-    <main>
-      <section id="homeView" class="view card home-card">
-        <h2>选择练习</h2>
-        <p class="muted">开机练习、停机练习会随机打乱 8 个步骤；科目一进入独立测量题页面。手机端已使用移动端优先触控布局，适合竖屏扫码练习和 PWA 添加到主屏幕后使用。</p>
-
-        <div class="home-actions">
-          <button type="button" class="primary-btn" id="startupBtn">开机练习</button>
-          <button type="button" class="primary-btn secondary" id="shutdownBtn">停机练习</button>
-          <button type="button" class="primary-btn subject-entry" id="subjectOneBtn">科目一</button>
-        </div>
-
-        <div class="notice">
-          <strong>手机使用建议：</strong>竖屏使用体验最好。发布到 GitHub Pages 后，学生扫码即可使用。
-        </div>
-      </section>
-
-      <section id="practiceView" class="view hidden" aria-live="polite">
-        <div class="top-toolbar">
-          <button type="button" id="backBtn">返回主界面</button>
-          <button type="button" id="restartBtn">重新开始</button>
-        </div>
-
-        <section class="card practice-title-card">
-          <div>
-            <h2 id="practiceTitle">练习</h2>
-            <p class="muted">先阅读 A-H 选项；点击上方任意选项文字，会填入当前高亮的步骤。刚开始默认是第 1 步，填完后自动跳到下一空白步骤。</p>
-          </div>
-          <span id="roundBadge" class="round-badge">第 1 轮</span>
-        </section>
-
-        <section class="card">
-          <h3>选项区：点击文字填入当前/下一空白步骤</h3>
-          <div id="optionList" class="option-list"></div>
-        </section>
-
-        <section class="card sticky-answer-card">
-          <h3>作答区</h3>
-          <div id="answerArea" class="answer-grid"></div>
-
-          <div class="action-row">
-            <button type="button" id="clearBtn">清空</button>
-            <button type="button" class="confirm-btn" id="confirmBtn">确认</button>
-          </div>
-        </section>
-
-        <section id="resultBox" class="result-box hidden" role="status"></section>
-      </section>
-
-      <section id="subjectOneView" class="view hidden subject-one-view" aria-live="polite">
-        <div class="top-toolbar subject-toolbar">
-          <button type="button" id="subjectBackBtn">返回主界面</button>
-          <button type="button" id="subjectRestartBtn">重新作答</button>
-        </div>
-
-        <section class="card practice-title-card subject-title-card">
-          <div>
-            <h2>科目一测量题</h2>
-            <p class="muted">共 4 道测量题。请在每道题下方填写测量结果或选择判断，完成后点击页面底部“确认答案”判分。</p>
-          </div>
-          <span class="round-badge">测量题</span>
-        </section>
-
-        <div id="subjectQuestionList" class="subject-question-list"></div>
-
-        <section class="card subject-action-card">
-          <div class="action-row subject-action-row">
-            <button type="button" id="subjectClearBtn">清空答案</button>
-            <button type="button" class="confirm-btn" id="subjectConfirmBtn">确认答案</button>
-          </div>
-        </section>
-
-        <section id="subjectResultBox" class="result-box hidden" role="status"></section>
-      </section>
-    </main>
-
-    <footer class="footer">
-      <span>本软件可离线缓存，适合课堂扫码练习。</span>
-    </footer>
-  </div>
-
-  <div id="modalRoot" class="modal-root hidden" aria-hidden="true"></div>
-
-  <script src="app.js?v=20260430-mobile-primary-v10" defer></script>
-</body>
-</html>
+{
+  "name": "制冷装置操作顺序练习软件",
+  "short_name": "制冷练习",
+  "description": "用于训练制冷装置开机、停机操作顺序和科目一测量题的手机练习软件。",
+  "start_url": "./index.html?v=20260430-mobile-primary-v11-fixed-mobile",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#eef4f8",
+  "theme_color": "#1769aa",
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "id": "./index.html"
+}

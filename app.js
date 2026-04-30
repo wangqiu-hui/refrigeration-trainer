@@ -1,0 +1,1525 @@
+const LETTERS = ["A", "B", "C", "D", "E", "F", "G", "H"];
+const STEP_COUNT = LETTERS.length;
+const ASSET_VERSION = "20260430-mobile-primary-v11-fixed-mobile";
+
+const FALLBACK_EXERCISES = {
+  startup: {
+    title: "开机练习",
+    steps: [
+      "观察冷却塔内是否有水，观察装置上吸气压力表、排气压力表压力值是否处于较低位。",
+      "按下系统启动按钮，给装置控制回路送电。",
+      "开启排气阀至最大位置；开启吸气阀至微开位置。",
+      "旋转冷却水泵启停旋钮至启动位，旋转冷却风机启停旋钮至启动位。",
+      "旋转冷冻水泵旋钮至启动位。",
+      "旋转供液电磁阀旋钮至打开位。",
+      "旋转压缩机启停旋钮至启动位。",
+      "密切关注吸气压力表、排气压力表，缓慢打开吸气阀至最大位置，启动完成。"
+    ]
+  },
+  shutdown: {
+    title: "停机练习",
+    steps: [
+      "将供液电磁阀启停旋钮旋于停止位。",
+      "当吸气压力低于 200kPa 时，将压缩机启停旋钮旋于停止位。",
+      "关闭吸气阀。",
+      "当排气压力低于 0.85MPa 时，关闭排气阀。",
+      "旋转冷冻水泵启停旋钮至停止位。",
+      "旋转冷却风机启停旋钮至停止位。",
+      "旋转冷却水泵启停旋钮至停止位。",
+      "按下系统停止按钮，装置控制系统断电，自带控制屏关闭，完成停机操作。"
+    ]
+  }
+};
+
+const SUBJECT_ONE_QUESTIONS = [
+  {
+    id: "q1",
+    title: "题目1",
+    prompt: "中央空调冷水机组装置当前处于【自动控制制冷运行】模式，装置详细运行工况请移步装置自带控制屏做进一步查看。当前冷却风机（三相异步感应电动机）正在运行，其控制柜内端子排接线如下图所示：请选取合适的测量工具，对冷却风机 U-V 间电压进行测量操作，并将测量结果填入下框。",
+    answerPrefix: "测量结果：冷却风机 U-V 间电压值为",
+    standardAnswer: "420 V",
+    fields: [
+      { name: "voltageUV", label: "冷却风机 U-V 间电压值", unit: "V", type: "number", answer: 420 }
+    ]
+  },
+  {
+    id: "q2",
+    title: "题目2",
+    prompt: "中央空调冷水机组装置当前处于【自动控制制冷运行】模式，装置详细运行工况请移步装置自带控制屏做进一步查看。当前冷却水泵（单相异步感应电动机）正在运行，其控制柜内端子排接线如下图所示：请选取合适的测量工具，对冷却水泵运行电流进行测量操作，并将测量结果填入下框。",
+    answerPrefix: "测量结果：冷却水泵运行电流值",
+    standardAnswer: "5 A",
+    fields: [
+      { name: "current", label: "冷却水泵运行电流值", unit: "A", type: "number", answer: 5 }
+    ]
+  },
+  {
+    id: "q3",
+    title: "题目3",
+    prompt: "中央空调冷水机组装置中冷冻水泵（单相异步感应电动机）因某种原因导致无法正常工作，您可移步装置自带控制屏做进一步查看。现初步怀疑该水泵电机绝缘出现问题，导致其漏电保护装置动作而断电。请选择合适的测量工具，测量该水泵电机线圈对地绝缘电阻，并将测量结果输入下框。冷冻水泵供电电源已可靠断开，您可放心操作。",
+    standardAnswer: "300 MΩ，正常",
+    fields: [
+      { name: "insulation", label: "冷冻水泵电机线圈对地绝缘电阻", unit: "MΩ", type: "number", answer: 300 },
+      {
+        name: "judgement",
+        label: "您认为该水泵绝缘阻值正常吗？",
+        type: "select",
+        answer: "normal",
+        options: [
+          { value: "normal", label: "正常" },
+          { value: "abnormal", label: "不正常" }
+        ]
+      }
+    ]
+  },
+  {
+    id: "q4",
+    title: "题目4",
+    prompt: "中央空调冷水机组装置当前处于【自动控制制冷运行】模式，装置运行工况请移步制冷装置自带控制屏做进一步查看。请在测量工具箱中选择合适的仪表对制冷系统管道外壁温度进行测量，并将测量结果输入下框。",
+    standardAnswer: "回气管道外壁温度 25 ℃，排气管道外壁温度 25 ℃",
+    fields: [
+      { name: "suctionTemp", label: "回气管道外壁温度", unit: "℃", type: "number", answer: 25 },
+      { name: "dischargeTemp", label: "排气管道外壁温度", unit: "℃", type: "number", answer: 25 }
+    ]
+  }
+];
+
+let exercises = FALLBACK_EXERCISES;
+let currentExerciseKey = null;
+let currentSession = null;
+let subjectOneRendered = false;
+let roundNumber = 0;
+let activeAnswerIndex = 0;
+let activeAnswerSource = "auto";
+let pendingOptionTap = null;
+let lastOptionActivation = { letter: "", time: 0, source: "" };
+let modalState = {
+  isOpen: false,
+  kind: "",
+  canClose: false,
+  lastFocusedElement: null,
+  previousBodyStyles: null,
+  scrollY: 0
+};
+
+const TAP_MOVE_TOLERANCE_PX = 48;
+const TAP_MAX_DURATION_MS = 1500;
+const DUPLICATE_TAP_GUARD_MS = 650;
+
+const homeView = document.getElementById("homeView");
+const practiceView = document.getElementById("practiceView");
+const subjectOneView = document.getElementById("subjectOneView");
+const pageHint = document.getElementById("pageHint");
+const practiceTitle = document.getElementById("practiceTitle");
+const roundBadge = document.getElementById("roundBadge");
+const optionList = document.getElementById("optionList");
+const answerArea = document.getElementById("answerArea");
+const resultBox = document.getElementById("resultBox");
+const modalRoot = document.getElementById("modalRoot");
+const appShell = document.querySelector(".app-shell");
+const subjectQuestionList = document.getElementById("subjectQuestionList");
+const subjectResultBox = document.getElementById("subjectResultBox");
+
+const startupBtn = document.getElementById("startupBtn");
+const shutdownBtn = document.getElementById("shutdownBtn");
+const subjectOneBtn = document.getElementById("subjectOneBtn");
+const backBtn = document.getElementById("backBtn");
+const restartBtn = document.getElementById("restartBtn");
+const clearBtn = document.getElementById("clearBtn");
+const confirmBtn = document.getElementById("confirmBtn");
+const subjectBackBtn = document.getElementById("subjectBackBtn");
+const subjectRestartBtn = document.getElementById("subjectRestartBtn");
+const subjectClearBtn = document.getElementById("subjectClearBtn");
+const subjectConfirmBtn = document.getElementById("subjectConfirmBtn");
+
+function reportAppError(message, error) {
+  console.error(message, error || "");
+  const bootError = document.getElementById("bootError");
+  if (bootError) {
+    bootError.className = "boot-error";
+    bootError.textContent = message + (error && error.message ? "：" + error.message : "");
+  }
+}
+
+function hideBootError() {
+  if (typeof window.__markAppReady === "function") {
+    window.__markAppReady();
+    return;
+  }
+
+  const bootError = document.getElementById("bootError");
+  if (bootError) {
+    bootError.classList.add("hidden");
+  }
+}
+
+function getElementValue(id) {
+  const element = document.getElementById(id);
+  return element ? element.value : "";
+}
+
+function focusElement(element) {
+  if (element && typeof element.focus === "function") {
+    element.focus();
+  }
+}
+
+startupBtn.addEventListener("click", () => startPractice("startup"));
+shutdownBtn.addEventListener("click", () => startPractice("shutdown"));
+subjectOneBtn.addEventListener("click", startSubjectOne);
+backBtn.addEventListener("click", showHome);
+restartBtn.addEventListener("click", restartPractice);
+clearBtn.addEventListener("click", clearAnswers);
+confirmBtn.addEventListener("click", confirmAnswers);
+subjectBackBtn.addEventListener("click", showHome);
+subjectRestartBtn.addEventListener("click", () => resetSubjectOne({ scroll: true }));
+subjectClearBtn.addEventListener("click", () => resetSubjectOne({ scroll: false }));
+subjectConfirmBtn.addEventListener("click", confirmSubjectOneAnswers);
+
+initApp();
+
+async function initApp() {
+  try {
+    const response = await fetch(`steps.json?v=${ASSET_VERSION}`, { cache: "no-cache" });
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const loadedExercises = await response.json();
+    validateExercises(loadedExercises);
+    exercises = loadedExercises;
+  } catch (error) {
+    // file:// 直接打开页面时，fetch 可能失败；此时使用内置数据，保证老师双击也能试用。
+    exercises = FALLBACK_EXERCISES;
+    console.warn("steps.json 读取失败，已使用内置步骤：", error);
+  }
+
+  registerServiceWorker();
+  hideBootError();
+}
+
+function registerServiceWorker() {
+  if (!("serviceWorker" in navigator)) {
+    return;
+  }
+
+  let hasReloadedForNewServiceWorker = false;
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (hasReloadedForNewServiceWorker) {
+      return;
+    }
+
+    hasReloadedForNewServiceWorker = true;
+    window.location.reload();
+  });
+
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register(`sw.js?v=${ASSET_VERSION}`).catch(error => {
+      console.warn("Service Worker 注册失败：", error);
+    });
+  });
+}
+
+function validateExercises(data) {
+  for (const key of ["startup", "shutdown"]) {
+    if (!data[key]) {
+      throw new Error(`缺少练习：${key}`);
+    }
+
+    if (typeof data[key].title !== "string" || data[key].title.trim() === "") {
+      throw new Error(`${key}.title 必须是非空字符串`);
+    }
+
+    if (!Array.isArray(data[key].steps) || data[key].steps.length !== STEP_COUNT) {
+      throw new Error(`${key}.steps 必须包含 ${STEP_COUNT} 个步骤`);
+    }
+
+    for (const step of data[key].steps) {
+      if (typeof step !== "string" || step.trim() === "") {
+        throw new Error(`${key}.steps 中每一项都必须是非空字符串`);
+      }
+    }
+  }
+}
+
+function showHome() {
+  closeModal({ force: true, restoreFocus: false });
+
+  currentExerciseKey = null;
+  currentSession = null;
+  roundNumber = 0;
+  activeAnswerIndex = 0;
+  activeAnswerSource = "auto";
+  lastOptionActivation = { letter: "", time: 0, source: "" };
+  pendingOptionTap = null;
+
+  homeView.classList.remove("hidden");
+  practiceView.classList.add("hidden");
+  subjectOneView.classList.add("hidden");
+  pageHint.textContent = "请选择练习类型";
+  hideResult();
+  hideSubjectResult();
+
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function startPractice(exerciseKey) {
+  closeModal({ force: true, restoreFocus: false });
+
+  currentExerciseKey = exerciseKey;
+  roundNumber = 0;
+
+  homeView.classList.add("hidden");
+  subjectOneView.classList.add("hidden");
+  practiceView.classList.remove("hidden");
+  window.scrollTo({ top: 0, behavior: "smooth" });
+
+  try {
+    newRound();
+  } catch (error) {
+    reportAppError("练习初始化失败，请刷新页面或清除缓存后重新扫码", error);
+    showResult("练习初始化失败，请刷新页面或清除缓存后重新扫码。", "error");
+    return;
+  }
+
+  if (exerciseKey === "startup") {
+    try {
+      renderStartupCheckModal();
+    } catch (error) {
+      reportAppError("开机前检查弹窗打开失败", error);
+      showResult("开机前检查弹窗打开失败，请刷新页面后重试。", "error");
+    }
+  }
+}
+
+function restartPractice() {
+  if (!currentExerciseKey) {
+    return;
+  }
+
+  const shouldShowStartupCheck = currentExerciseKey === "startup";
+  closeModal({ force: true, restoreFocus: false });
+
+  try {
+    newRound();
+  } catch (error) {
+    reportAppError("练习重新开始失败，请刷新页面或清除缓存后重新扫码", error);
+    showResult("练习重新开始失败，请刷新页面或清除缓存后重新扫码。", "error");
+    return;
+  }
+
+  window.scrollTo({ top: 0, behavior: "smooth" });
+
+  if (shouldShowStartupCheck) {
+    try {
+      renderStartupCheckModal();
+    } catch (error) {
+      reportAppError("开机前检查弹窗打开失败", error);
+      showResult("开机前检查弹窗打开失败，请刷新页面后重试。", "error");
+    }
+  }
+}
+
+function newRound() {
+  const exercise = exercises[currentExerciseKey];
+  const indexedSteps = exercise.steps.map((text, originalIndex) => ({ text, originalIndex }));
+
+  shuffle(indexedSteps);
+
+  const optionMap = {};
+  const indexToLetter = {};
+
+  LETTERS.forEach((letter, index) => {
+    const item = indexedSteps[index];
+    optionMap[letter] = item.text;
+    indexToLetter[item.originalIndex] = letter;
+  });
+
+  const correctLetters = exercise.steps.map((_, index) => indexToLetter[index]);
+
+  roundNumber += 1;
+  activeAnswerIndex = 0;
+  activeAnswerSource = "auto";
+  lastOptionActivation = { letter: "", time: 0, source: "" };
+  pendingOptionTap = null;
+  currentSession = {
+    title: exercise.title,
+    optionMap,
+    correctLetters,
+    finalValuesModalOpened: false
+  };
+
+  renderPractice();
+}
+
+function renderPractice() {
+  hideResult();
+  practiceTitle.textContent = currentSession.title;
+  pageHint.textContent = currentSession.title;
+  roundBadge.textContent = `第 ${roundNumber} 轮`;
+
+  renderOptions();
+  renderAnswers();
+  setActiveAnswerIndex(0, { source: "auto", scroll: false, focus: false });
+  updateOptionSelectedStates();
+}
+
+function renderOptions() {
+  optionList.innerHTML = "";
+
+  for (const letter of LETTERS) {
+    const item = document.createElement("button");
+    item.type = "button";
+    item.className = "option-item";
+    item.dataset.letter = letter;
+    item.setAttribute("aria-pressed", "false");
+    item.setAttribute(
+      "aria-label",
+      `选择 ${letter}，填入当前高亮的作答步骤。${currentSession.optionMap[letter]}`
+    );
+    bindOptionActivationEvents(item);
+
+    const letterEl = document.createElement("span");
+    letterEl.className = "option-letter";
+    letterEl.textContent = `${letter}.`;
+
+    const textEl = document.createElement("span");
+    textEl.className = "option-text";
+    textEl.textContent = currentSession.optionMap[letter];
+
+    item.appendChild(letterEl);
+    item.appendChild(textEl);
+    optionList.appendChild(item);
+  }
+}
+
+function bindOptionActivationEvents(optionButton) {
+  if (window.PointerEvent) {
+    optionButton.addEventListener("pointerdown", handleOptionPointerDown, { passive: true });
+    optionButton.addEventListener("pointerup", handleOptionPointerUp, { passive: false });
+    optionButton.addEventListener("pointercancel", cancelPendingOptionTap);
+    optionButton.addEventListener("lostpointercapture", cancelPendingOptionTap);
+  } else {
+    optionButton.addEventListener("touchstart", handleOptionTouchStart, { passive: true });
+    optionButton.addEventListener("touchend", handleOptionTouchEnd, { passive: false });
+    optionButton.addEventListener("touchcancel", cancelPendingOptionTap);
+  }
+
+  // click 是最后兜底：桌面浏览器、个别旧版手机浏览器、以及被浏览器重新合成的点击都会走这里。
+  // activateOptionButton 会过滤 pointer/touch 后紧跟的合成 click，避免一次轻点填两次。
+  optionButton.addEventListener("click", handleOptionClick);
+}
+
+function handleOptionPointerDown(event) {
+  if (!event.isPrimary || (event.pointerType === "mouse" && event.button !== 0)) {
+    return;
+  }
+
+  const optionButton = event.currentTarget;
+  pendingOptionTap = {
+    button: optionButton,
+    pointerId: event.pointerId,
+    x: event.clientX,
+    y: event.clientY,
+    time: getNow()
+  };
+
+  optionButton.classList.add("pressing");
+
+  // 手机上手指会有轻微滑动；不捕获指针时，pointerup 可能落到别的元素上，表现为“点了没反应”。
+  // 捕获后，后续 pointerup 仍会回到这个选项按钮，再按位移判断是真点击还是滚动。
+  try {
+    if (typeof optionButton.setPointerCapture === "function") {
+      optionButton.setPointerCapture(event.pointerId);
+    }
+  } catch (error) {
+    // 某些浏览器/时机会拒绝捕获，click 兜底仍然可用。
+  }
+}
+
+function handleOptionPointerUp(event) {
+  if (!event.isPrimary || (event.pointerType === "mouse" && event.button !== 0)) {
+    return;
+  }
+
+  const optionButton = event.currentTarget;
+  const isTap = isPendingOptionTap(optionButton, event.pointerId, event.clientX, event.clientY);
+  releaseOptionPointerCapture(optionButton, event.pointerId);
+  cancelPendingOptionTap();
+
+  if (!isTap) {
+    return;
+  }
+
+  event.preventDefault();
+  activateOptionButton(optionButton, "pointer");
+}
+
+function handleOptionTouchStart(event) {
+  if (window.PointerEvent) {
+    return;
+  }
+
+  const touch = event.changedTouches && event.changedTouches[0];
+  if (!touch) {
+    return;
+  }
+
+  pendingOptionTap = {
+    button: event.currentTarget,
+    pointerId: touch.identifier,
+    x: touch.clientX,
+    y: touch.clientY,
+    time: getNow()
+  };
+
+  event.currentTarget.classList.add("pressing");
+}
+
+function handleOptionTouchEnd(event) {
+  if (window.PointerEvent) {
+    return;
+  }
+
+  const touch = event.changedTouches && event.changedTouches[0];
+  if (!touch) {
+    return;
+  }
+
+  const optionButton = event.currentTarget;
+  const isTap = isPendingOptionTap(optionButton, touch.identifier, touch.clientX, touch.clientY);
+  cancelPendingOptionTap();
+
+  if (!isTap) {
+    return;
+  }
+
+  event.preventDefault();
+  activateOptionButton(optionButton, "touch");
+}
+
+function handleOptionClick(event) {
+  activateOptionButton(event.currentTarget, "click");
+}
+
+function activateOptionButton(optionButton, source = "click") {
+  if (!optionButton || !optionButton.dataset) {
+    return;
+  }
+
+  const letter = optionButton.dataset.letter;
+  if (!letter) {
+    return;
+  }
+
+  const now = getNow();
+  const isSyntheticClickAfterTouch = source === "click"
+    && lastOptionActivation.source !== "click"
+    && now - lastOptionActivation.time < DUPLICATE_TAP_GUARD_MS;
+
+  if (isSyntheticClickAfterTouch) {
+    return;
+  }
+
+  lastOptionActivation = { letter, time: now, source };
+  chooseOptionLetter(letter);
+}
+
+function isPendingOptionTap(optionButton, pointerId, clientX, clientY) {
+  if (!pendingOptionTap || pendingOptionTap.button !== optionButton || pendingOptionTap.pointerId !== pointerId) {
+    return false;
+  }
+
+  const movedX = Math.abs(clientX - pendingOptionTap.x);
+  const movedY = Math.abs(clientY - pendingOptionTap.y);
+  const duration = getNow() - pendingOptionTap.time;
+  return movedX <= TAP_MOVE_TOLERANCE_PX
+    && movedY <= TAP_MOVE_TOLERANCE_PX
+    && duration <= TAP_MAX_DURATION_MS;
+}
+
+function cancelPendingOptionTap() {
+  if (pendingOptionTap && pendingOptionTap.button) {
+    pendingOptionTap.button.classList.remove("pressing");
+  }
+  pendingOptionTap = null;
+}
+
+function releaseOptionPointerCapture(optionButton, pointerId) {
+  try {
+    if (typeof optionButton.releasePointerCapture === "function" && optionButton.hasPointerCapture(pointerId)) {
+      optionButton.releasePointerCapture(pointerId);
+    }
+  } catch (error) {
+    // 忽略释放失败；浏览器会在 pointerup 后自动释放。
+  }
+}
+
+function getNow() {
+  if (window.performance && typeof window.performance.now === "function") {
+    return window.performance.now();
+  }
+
+  return Date.now();
+}
+
+function chooseOptionLetter(letter) {
+  if (!currentSession || !LETTERS.includes(letter)) {
+    return;
+  }
+
+  const selects = getAnswerSelects();
+  const targetIndex = resolveActiveAnswerIndex(selects);
+  const targetSelect = selects[targetIndex];
+
+  if (!targetSelect) {
+    console.warn("未找到当前作答步骤下拉框：", { letter, targetIndex });
+    return;
+  }
+
+  const previousIndex = selects.findIndex(select => select.value === letter);
+
+  // 移动端交互规则必须简单：点哪个字母，就把哪个字母放到当前高亮步骤。
+  // 如果这个字母已经在别的步骤，直接移动过来并清空旧位置，避免“点了但没选中”的错觉。
+  if (previousIndex !== -1 && previousIndex !== targetIndex) {
+    clearSelectValue(selects[previousIndex]);
+  }
+
+  targetSelect.value = letter;
+  const targetCell = targetSelect.closest(".answer-cell");
+  if (targetCell) {
+    targetCell.classList.add("manual-filled");
+  }
+  markAnswersChanged();
+
+  updateOptionSelectedStates();
+  flashAnswerCell(targetSelect, { scroll: false });
+
+  const nextEmptyIndex = findNextEmptyIndex(targetIndex + 1, selects);
+  setActiveAnswerIndex(nextEmptyIndex !== null && nextEmptyIndex !== undefined ? nextEmptyIndex : targetIndex, { source: "auto", scroll: false, focus: false });
+
+  const targetStepNumber = targetIndex + 1;
+  const movedText = previousIndex !== -1 && previousIndex !== targetIndex ? `，并已从第 ${previousIndex + 1} 步移除` : "";
+  const nextStepText = nextEmptyIndex === null ? "" : `；下一步请填写第 ${nextEmptyIndex + 1} 步`;
+  showResult(`已将选项 ${letter} 填入第 ${targetStepNumber} 步${movedText}${nextStepText}`, "success", { scroll: false });
+}
+
+function resolveActiveAnswerIndex(selects) {
+  if (Number.isInteger(activeAnswerIndex) && activeAnswerIndex >= 0 && activeAnswerIndex < selects.length) {
+    return activeAnswerIndex;
+  }
+
+  const firstEmptyIndex = findNextEmptyIndex(0, selects);
+  return firstEmptyIndex !== null && firstEmptyIndex !== undefined ? firstEmptyIndex : 0;
+}
+
+function getAnswerSelects() {
+  return Array.from(answerArea.querySelectorAll("select"));
+}
+
+function findNextEmptyIndex(startIndex = 0, selects = getAnswerSelects()) {
+  if (selects.length === 0) {
+    return null;
+  }
+
+  for (let offset = 0; offset < selects.length; offset += 1) {
+    const index = (startIndex + offset) % selects.length;
+    if (selects[index].value === "") {
+      return index;
+    }
+  }
+
+  return null;
+}
+
+function setActiveAnswerIndex(index, options = {}) {
+  const { source = "user", scroll = false, focus = false } = options;
+  const selects = getAnswerSelects();
+
+  if (!Number.isInteger(index) || index < 0 || index >= selects.length) {
+    return;
+  }
+
+  activeAnswerIndex = index;
+  activeAnswerSource = source;
+  syncActiveAnswerCell();
+
+  const activeSelect = selects[index];
+  const activeCell = activeSelect.closest(".answer-cell");
+
+  if (focus) {
+    try {
+      activeSelect.focus({ preventScroll: !scroll });
+    } catch (error) {
+      activeSelect.focus();
+    }
+  }
+
+  if (scroll && activeCell) {
+    activeCell.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+}
+
+function syncActiveAnswerCell() {
+  for (const cell of answerArea.querySelectorAll(".answer-cell")) {
+    const isActive = Number.parseInt(cell.dataset.index, 10) === activeAnswerIndex;
+    cell.classList.toggle("active", isActive);
+    cell.setAttribute("aria-current", isActive ? "step" : "false");
+  }
+}
+
+function clearSelectValue(select) {
+  select.value = "";
+  const cell = select.closest(".answer-cell");
+  if (cell) {
+    cell.classList.remove("manual-filled", "just-filled");
+  }
+}
+
+function updateOptionSelectedStates() {
+  const selectedLetters = new Set(getUserLetters().filter(Boolean));
+
+  for (const item of optionList.querySelectorAll(".option-item")) {
+    const selected = selectedLetters.has(item.dataset.letter);
+    item.classList.toggle("selected", selected);
+    item.setAttribute("aria-pressed", selected ? "true" : "false");
+  }
+}
+
+function flashAnswerCell(select, options = {}) {
+  const { scroll = true } = options;
+  const cell = select.closest(".answer-cell");
+  if (!cell) {
+    return;
+  }
+
+  cell.classList.remove("just-filled");
+  // 触发一次重绘，确保连续点击时高亮动画也能重新播放。
+  void cell.offsetWidth;
+  cell.classList.add("just-filled");
+
+  if (scroll) {
+    cell.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+
+  window.setTimeout(() => {
+    cell.classList.remove("just-filled");
+  }, 900);
+}
+
+function renderAnswers() {
+  answerArea.innerHTML = "";
+
+  for (let index = 0; index < STEP_COUNT; index += 1) {
+    const cell = document.createElement("div");
+    cell.className = "answer-cell";
+    cell.dataset.index = String(index);
+    cell.addEventListener("pointerdown", () => setActiveAnswerIndex(index, { source: "user", scroll: false, focus: false }));
+    cell.addEventListener("click", () => setActiveAnswerIndex(index, { source: "user", scroll: false, focus: false }));
+
+    const label = document.createElement("label");
+    label.setAttribute("for", `answer-${index}`);
+    label.textContent = `第 ${index + 1} 步`;
+
+    const select = document.createElement("select");
+    select.id = `answer-${index}`;
+    select.dataset.index = String(index);
+    select.setAttribute("aria-label", `第 ${index + 1} 步`);
+
+    const emptyOption = document.createElement("option");
+    emptyOption.value = "";
+    emptyOption.textContent = "请选择";
+    select.appendChild(emptyOption);
+
+    for (const letter of LETTERS) {
+      const option = document.createElement("option");
+      option.value = letter;
+      option.textContent = letter;
+      select.appendChild(option);
+    }
+
+    select.addEventListener("pointerdown", () => setActiveAnswerIndex(index, { source: "user", scroll: false, focus: false }));
+    select.addEventListener("focus", () => setActiveAnswerIndex(index, { source: "user", scroll: false, focus: false }));
+    select.addEventListener("change", handleAnswerChange);
+
+    cell.appendChild(label);
+    cell.appendChild(select);
+    answerArea.appendChild(cell);
+  }
+}
+
+function handleAnswerChange(event) {
+  const select = event.currentTarget;
+  const selectedValue = select.value;
+  const currentIndex = Number.parseInt(select.dataset.index, 10);
+  const cell = select.closest(".answer-cell");
+
+  setActiveAnswerIndex(currentIndex, { source: "user", scroll: false, focus: false });
+  markAnswersChanged();
+
+  if (!selectedValue) {
+    if (cell) {
+      cell.classList.remove("manual-filled");
+    }
+    updateOptionSelectedStates();
+    hideResult();
+    return;
+  }
+
+  const userLetters = getUserLetters().filter(Boolean);
+  const count = userLetters.filter(letter => letter === selectedValue).length;
+
+  if (count > 1) {
+    select.value = "";
+    if (cell) {
+      cell.classList.remove("manual-filled");
+    }
+    updateOptionSelectedStates();
+    showResult("不能重复选择同一个选项", "warning");
+    return;
+  }
+
+  if (cell) {
+    cell.classList.add("manual-filled");
+  }
+  updateOptionSelectedStates();
+  hideResult();
+
+  const nextEmptyIndex = findNextEmptyIndex(currentIndex + 1);
+  setActiveAnswerIndex(nextEmptyIndex !== null && nextEmptyIndex !== undefined ? nextEmptyIndex : currentIndex, { source: "auto", scroll: false, focus: false });
+}
+
+function getUserLetters() {
+  return Array.from(answerArea.querySelectorAll("select"), select => select.value);
+}
+
+function clearAnswers() {
+  if (isModalOpen()) {
+    return;
+  }
+
+  for (const select of answerArea.querySelectorAll("select")) {
+    clearSelectValue(select);
+  }
+
+  setActiveAnswerIndex(0, { source: "auto", scroll: false, focus: false });
+  lastOptionActivation = { letter: "", time: 0, source: "" };
+  markAnswersChanged();
+  updateOptionSelectedStates();
+  hideResult();
+}
+
+function confirmAnswers() {
+  if (!currentSession || isModalOpen()) {
+    return;
+  }
+
+  const userLetters = getUserLetters();
+
+  if (userLetters.some(letter => letter === "")) {
+    const firstEmptyIndex = userLetters.findIndex(letter => letter === "");
+    setActiveAnswerIndex(firstEmptyIndex, { source: "auto", scroll: true, focus: false });
+    showResult("请完成所有步骤后再确认", "warning");
+    return;
+  }
+
+  if (userLetters.some(letter => !LETTERS.includes(letter)) || new Set(userLetters).size !== userLetters.length) {
+    showResult("不能重复选择同一个选项", "warning");
+    return;
+  }
+
+  const wrongPositions = [];
+
+  userLetters.forEach((letter, index) => {
+    if (letter !== currentSession.correctLetters[index]) {
+      wrongPositions.push(index + 1);
+    }
+  });
+
+  if (wrongPositions.length === 0) {
+    showResult("回答正确", "success");
+
+    if (!currentSession.finalValuesModalOpened) {
+      currentSession.finalValuesModalOpened = true;
+      try {
+        renderFinalValuesModal();
+      } catch (error) {
+        reportAppError("设备数值确认弹窗打开失败", error);
+        showResult("设备数值确认弹窗打开失败，请刷新页面后重试。", "error");
+      }
+    }
+
+    return;
+  }
+
+  const wrongText = wrongPositions.map(position => `第 ${position} 步`).join("、");
+
+  showResult(
+    [
+      "回答错误",
+      "",
+      `用户填写的答案：${userLetters.join(" ")}`,
+      `正确答案：${currentSession.correctLetters.join(" ")}`,
+      `错误的位置：${wrongText}错误`
+    ].join("\n"),
+    "error"
+  );
+}
+
+
+function markAnswersChanged() {
+  if (currentSession) {
+    currentSession.finalValuesModalOpened = false;
+  }
+}
+
+function isModalOpen() {
+  return Boolean(modalState.isOpen);
+}
+
+function openModal({ kind, title, content, canClose = false, initialFocusSelector = "input, select, button" }) {
+  if (!modalRoot) {
+    return;
+  }
+
+  closeModal({ force: true, restoreFocus: false });
+
+  modalState = {
+    isOpen: true,
+    kind,
+    canClose,
+    lastFocusedElement: document.activeElement instanceof HTMLElement ? document.activeElement : null,
+    previousBodyStyles: saveBodyStyles(),
+    scrollY: window.scrollY || document.documentElement.scrollTop || 0
+  };
+
+  modalRoot.innerHTML = `
+    <div class="modal-backdrop" data-modal-backdrop>
+      <section class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modalTitle" tabindex="-1">
+        <div class="modal-header">
+          <h2 id="modalTitle">${escapeHtml(title)}</h2>
+        </div>
+        <div class="modal-body">
+          ${content}
+        </div>
+      </section>
+    </div>
+  `;
+
+  modalRoot.classList.remove("hidden");
+  modalRoot.setAttribute("aria-hidden", "false");
+  setBackgroundInert(true);
+  lockBodyScroll();
+
+  modalRoot.addEventListener("keydown", handleModalKeydown);
+  const initialFocusTarget = modalRoot.querySelector(initialFocusSelector) || modalRoot.querySelector(".modal-card");
+  window.setTimeout(() => {
+    try {
+      if (initialFocusTarget) {
+        initialFocusTarget.focus({ preventScroll: true });
+      }
+    } catch (error) {
+      if (initialFocusTarget) {
+        initialFocusTarget.focus();
+      }
+    }
+  }, 0);
+}
+
+function closeModal(options = {}) {
+  const { force = false, restoreFocus = true } = options;
+
+  if (!modalRoot || !modalState.isOpen) {
+    return;
+  }
+
+  if (!force && !modalState.canClose) {
+    return;
+  }
+
+  const lastFocusedElement = modalState.lastFocusedElement;
+  const scrollY = modalState.scrollY;
+  const previousBodyStyles = modalState.previousBodyStyles;
+
+  modalRoot.removeEventListener("keydown", handleModalKeydown);
+  modalRoot.innerHTML = "";
+  modalRoot.classList.add("hidden");
+  modalRoot.setAttribute("aria-hidden", "true");
+  setBackgroundInert(false);
+  unlockBodyScroll(previousBodyStyles, scrollY);
+
+  modalState = {
+    isOpen: false,
+    kind: "",
+    canClose: false,
+    lastFocusedElement: null,
+    previousBodyStyles: null,
+    scrollY: 0
+  };
+
+  if (restoreFocus && lastFocusedElement && typeof lastFocusedElement.focus === "function") {
+    window.setTimeout(() => {
+      try {
+        lastFocusedElement.focus({ preventScroll: true });
+      } catch (error) {
+        lastFocusedElement.focus();
+      }
+    }, 0);
+  }
+}
+
+function renderStartupCheckModal() {
+  openModal({
+    kind: "startup-check",
+    title: "开机前检查",
+    canClose: false,
+    content: `
+      <form id="startupCheckForm" class="modal-form" novalidate>
+        <p class="modal-desc">请先完成以下 3 项检查，全部正确后才能进入开机练习。</p>
+
+        <label class="modal-field" for="startupWaterInput">
+          <span>1. 冷却塔内是否有水</span>
+          <input id="startupWaterInput" type="text" autocomplete="off" autocapitalize="off" placeholder="请输入检查结果" />
+        </label>
+
+        <label class="modal-field" for="startupSuctionInput">
+          <span>2. 吸气数值</span>
+          <input id="startupSuctionInput" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" placeholder="请输入数值" />
+        </label>
+
+        <label class="modal-field" for="startupDischargeInput">
+          <span>3. 排气数值</span>
+          <input id="startupDischargeInput" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" placeholder="请输入数值" />
+        </label>
+
+        <div id="startupCheckFeedback" class="modal-feedback hidden" role="status" aria-live="polite"></div>
+
+        <div class="modal-actions">
+          <button type="submit" class="modal-primary-btn">提交检查</button>
+        </div>
+      </form>
+    `
+  });
+
+  const form = document.getElementById("startupCheckForm");
+  if (form) {
+    form.addEventListener("submit", event => {
+      event.preventDefault();
+      validateStartupCheck();
+    });
+  }
+}
+
+function validateStartupCheck() {
+  const waterValue = normalizeAnswer(getElementValue("startupWaterInput"));
+  const suctionValue = normalizeAnswer(getElementValue("startupSuctionInput"));
+  const dischargeValue = normalizeAnswer(getElementValue("startupDischargeInput"));
+
+  const waterAnswers = new Set(["有", "有水", "有的", "是", "是的"]);
+  const errors = [];
+
+  if (!waterAnswers.has(waterValue)) {
+    errors.push("第 1 题应填写：有");
+  }
+
+  if (suctionValue !== "440") {
+    errors.push("第 2 题应填写：440");
+  }
+
+  if (dischargeValue !== "440") {
+    errors.push("第 3 题应填写：440");
+  }
+
+  const feedback = document.getElementById("startupCheckFeedback");
+  if (errors.length > 0) {
+    showModalFeedback(feedback, ["开机前检查未通过，请核对后重新提交。", ...errors].join("\n"), "error");
+    focusFirstInvalidStartupInput(waterAnswers, waterValue, suctionValue, dischargeValue);
+    return;
+  }
+
+  closeModal({ force: true });
+}
+
+function renderFinalValuesModal() {
+  openModal({
+    kind: "final-values",
+    title: "设备数值确认",
+    canClose: false,
+    content: `
+      <form id="finalValuesForm" class="modal-form" novalidate>
+        <p class="modal-desc">操作完设备的三个数值</p>
+
+        <div class="modal-inline-grid" aria-label="依次填写三个设备数值">
+          <label class="modal-field compact" for="finalValueInput1">
+            <span>数值 1</span>
+            <input id="finalValueInput1" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" />
+          </label>
+          <label class="modal-field compact" for="finalValueInput2">
+            <span>数值 2</span>
+            <input id="finalValueInput2" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" />
+          </label>
+          <label class="modal-field compact" for="finalValueInput3">
+            <span>数值 3</span>
+            <input id="finalValueInput3" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" />
+          </label>
+        </div>
+
+        <div id="finalValuesFeedback" class="modal-feedback hidden" role="status" aria-live="polite"></div>
+
+        <div class="modal-actions two-columns">
+          <button type="submit" id="finalValuesSubmitBtn" class="modal-primary-btn">确认数值</button>
+          <button type="button" id="finalValuesCloseBtn" class="modal-secondary-btn" disabled>关闭</button>
+        </div>
+      </form>
+    `
+  });
+
+  const form = document.getElementById("finalValuesForm");
+  const closeButton = document.getElementById("finalValuesCloseBtn");
+
+  if (form) {
+    form.addEventListener("submit", event => {
+      event.preventDefault();
+      validateFinalValues();
+    });
+  }
+
+  if (closeButton) {
+    closeButton.addEventListener("click", () => closeModal());
+  }
+}
+
+function validateFinalValues() {
+  const values = [1, 2, 3].map(index => normalizeAnswer(getElementValue(`finalValueInput${index}`)));
+  const correctValues = ["8", "6", "5"];
+  const feedback = document.getElementById("finalValuesFeedback");
+
+  const isCorrect = values.every((value, index) => value === correctValues[index]);
+  if (!isCorrect) {
+    showModalFeedback(feedback, "设备数值不正确，请按顺序重新填写。", "error");
+    const firstWrongIndex = values.findIndex((value, index) => value !== correctValues[index]);
+    focusElement(document.getElementById(`finalValueInput${firstWrongIndex + 1}`));
+    return;
+  }
+
+  showModalFeedback(feedback, "操作完成，设备数值正确。", "success");
+  modalState.canClose = true;
+
+  const submitButton = document.getElementById("finalValuesSubmitBtn");
+  const closeButton = document.getElementById("finalValuesCloseBtn");
+  if (submitButton) {
+    submitButton.disabled = true;
+    submitButton.textContent = "已确认";
+  }
+  if (closeButton) {
+    closeButton.disabled = false;
+    closeButton.focus();
+  }
+}
+
+function showModalFeedback(feedbackElement, message, type) {
+  if (!feedbackElement) {
+    return;
+  }
+
+  feedbackElement.textContent = message;
+  feedbackElement.className = `modal-feedback ${type}`;
+  feedbackElement.classList.remove("hidden");
+  feedbackElement.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+function focusFirstInvalidStartupInput(waterAnswers, waterValue, suctionValue, dischargeValue) {
+  let target = null;
+  if (!waterAnswers.has(waterValue)) {
+    target = document.getElementById("startupWaterInput");
+  } else if (suctionValue !== "440") {
+    target = document.getElementById("startupSuctionInput");
+  } else if (dischargeValue !== "440") {
+    target = document.getElementById("startupDischargeInput");
+  }
+
+  focusElement(target);
+}
+
+function normalizeAnswer(value) {
+  return String(value).trim().replace(/\s+/g, "");
+}
+
+function handleModalKeydown(event) {
+  if (!modalState.isOpen) {
+    return;
+  }
+
+  if (event.key === "Escape") {
+    if (modalState.canClose) {
+      event.preventDefault();
+      closeModal();
+    }
+    return;
+  }
+
+  if (event.key !== "Tab") {
+    return;
+  }
+
+  const focusableElements = getModalFocusableElements();
+  if (focusableElements.length === 0) {
+    event.preventDefault();
+    focusElement(modalRoot.querySelector(".modal-card"));
+    return;
+  }
+
+  const firstElement = focusableElements[0];
+  const lastElement = focusableElements[focusableElements.length - 1];
+
+  if (event.shiftKey && document.activeElement === firstElement) {
+    event.preventDefault();
+    lastElement.focus();
+  } else if (!event.shiftKey && document.activeElement === lastElement) {
+    event.preventDefault();
+    firstElement.focus();
+  }
+}
+
+function getModalFocusableElements() {
+  if (!modalRoot) {
+    return [];
+  }
+
+  return Array.from(modalRoot.querySelectorAll(
+    'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [href], [tabindex]:not([tabindex="-1"])'
+  )).filter(element => element.offsetParent !== null || element === document.activeElement);
+}
+
+function saveBodyStyles() {
+  return {
+    position: document.body.style.position,
+    top: document.body.style.top,
+    left: document.body.style.left,
+    right: document.body.style.right,
+    width: document.body.style.width,
+    overflow: document.body.style.overflow
+  };
+}
+
+function lockBodyScroll() {
+  document.body.classList.add("modal-open");
+  document.body.style.position = "fixed";
+  document.body.style.top = `-${modalState.scrollY}px`;
+  document.body.style.left = "0";
+  document.body.style.right = "0";
+  document.body.style.width = "100%";
+  document.body.style.overflow = "hidden";
+}
+
+function unlockBodyScroll(previousBodyStyles, scrollY) {
+  document.body.classList.remove("modal-open");
+
+  if (previousBodyStyles) {
+    document.body.style.position = previousBodyStyles.position;
+    document.body.style.top = previousBodyStyles.top;
+    document.body.style.left = previousBodyStyles.left;
+    document.body.style.right = previousBodyStyles.right;
+    document.body.style.width = previousBodyStyles.width;
+    document.body.style.overflow = previousBodyStyles.overflow;
+  }
+
+  window.scrollTo(0, scrollY || 0);
+}
+
+function setBackgroundInert(isInert) {
+  if (!appShell) {
+    return;
+  }
+
+  if ("inert" in appShell) {
+    appShell.inert = isInert;
+  }
+
+  if (isInert) {
+    appShell.setAttribute("aria-hidden", "true");
+  } else {
+    appShell.removeAttribute("aria-hidden");
+  }
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function showResult(message, type, options = {}) {
+  const { scroll = true } = options;
+
+  resultBox.textContent = message;
+  resultBox.className = `result-box ${type}`;
+  resultBox.classList.remove("hidden");
+
+  if (scroll) {
+    resultBox.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+}
+
+function hideResult() {
+  resultBox.textContent = "";
+  resultBox.className = "result-box hidden";
+}
+
+
+function startSubjectOne() {
+  closeModal({ force: true, restoreFocus: false });
+
+  currentExerciseKey = null;
+  currentSession = null;
+  hideResult();
+
+  if (!subjectOneRendered) {
+    try {
+      renderSubjectOneQuestions();
+      subjectOneRendered = true;
+    } catch (error) {
+      reportAppError("科目一页面渲染失败", error);
+      return;
+    }
+  }
+
+  resetSubjectOne({ scroll: false });
+  homeView.classList.add("hidden");
+  practiceView.classList.add("hidden");
+  subjectOneView.classList.remove("hidden");
+  pageHint.textContent = "科目一测量题";
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function renderSubjectOneQuestions() {
+  subjectQuestionList.innerHTML = "";
+
+  SUBJECT_ONE_QUESTIONS.forEach((question, questionIndex) => {
+    const article = document.createElement("article");
+    article.className = "card subject-question-card";
+    article.dataset.questionId = question.id;
+    article.dataset.questionIndex = String(questionIndex);
+
+    const heading = document.createElement("h3");
+    heading.textContent = question.title;
+
+    const prompt = document.createElement("p");
+    prompt.className = "question-prompt";
+    prompt.textContent = question.prompt;
+
+    const fieldGroup = document.createElement("div");
+    fieldGroup.className = "subject-fields";
+
+    question.fields.forEach(field => {
+      fieldGroup.appendChild(createSubjectField(question, field));
+    });
+
+    const feedback = document.createElement("div");
+    feedback.className = "question-feedback hidden";
+    feedback.setAttribute("role", "status");
+
+    article.appendChild(heading);
+    article.appendChild(prompt);
+    article.appendChild(fieldGroup);
+    article.appendChild(feedback);
+    subjectQuestionList.appendChild(article);
+  });
+}
+
+function createSubjectField(question, field) {
+  const wrapper = document.createElement("label");
+  wrapper.className = "subject-field";
+  wrapper.setAttribute("for", `${question.id}-${field.name}`);
+
+  const labelText = document.createElement("span");
+  labelText.className = "subject-field-label";
+  labelText.textContent = field.label;
+
+  let control;
+  if (field.type === "select") {
+    control = document.createElement("select");
+
+    const emptyOption = document.createElement("option");
+    emptyOption.value = "";
+    emptyOption.textContent = "请选择";
+    control.appendChild(emptyOption);
+
+    field.options.forEach(option => {
+      const optionEl = document.createElement("option");
+      optionEl.value = option.value;
+      optionEl.textContent = option.label;
+      control.appendChild(optionEl);
+    });
+  } else {
+    control = document.createElement("input");
+    control.type = "number";
+    control.inputMode = "decimal";
+    control.step = "any";
+    control.placeholder = "请输入测量值";
+  }
+
+  control.id = `${question.id}-${field.name}`;
+  control.dataset.questionId = question.id;
+  control.dataset.fieldName = field.name;
+  control.autocomplete = "off";
+  control.addEventListener("input", clearSubjectJudgementState);
+  control.addEventListener("change", clearSubjectJudgementState);
+
+  const controlWrap = document.createElement("span");
+  controlWrap.className = "subject-control-wrap";
+  controlWrap.appendChild(control);
+
+  if (field.unit) {
+    const unit = document.createElement("span");
+    unit.className = "subject-unit";
+    unit.textContent = field.unit;
+    controlWrap.appendChild(unit);
+  }
+
+  wrapper.appendChild(labelText);
+  wrapper.appendChild(controlWrap);
+  return wrapper;
+}
+
+function clearSubjectJudgementState() {
+  hideSubjectResult();
+
+  const card = this.closest(".subject-question-card");
+  if (card) {
+    card.classList.remove("correct", "wrong");
+    const feedback = card.querySelector(".question-feedback");
+    if (feedback) {
+      feedback.textContent = "";
+      feedback.className = "question-feedback hidden";
+    }
+  }
+}
+
+function resetSubjectOne(options = {}) {
+  const { scroll = false } = options;
+
+  for (const control of subjectQuestionList.querySelectorAll("input, select")) {
+    control.value = "";
+  }
+
+  for (const card of subjectQuestionList.querySelectorAll(".subject-question-card")) {
+    card.classList.remove("correct", "wrong");
+    const feedback = card.querySelector(".question-feedback");
+    if (feedback) {
+      feedback.textContent = "";
+      feedback.className = "question-feedback hidden";
+    }
+  }
+
+  hideSubjectResult();
+
+  if (scroll) {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+}
+
+function confirmSubjectOneAnswers() {
+  const firstEmptyControl = findFirstEmptySubjectControl();
+  if (firstEmptyControl) {
+    focusSubjectControl(firstEmptyControl);
+    showSubjectResult("请完成所有测量结果和判断后再确认", "warning");
+    return;
+  }
+
+  let correctCount = 0;
+
+  SUBJECT_ONE_QUESTIONS.forEach(question => {
+    const isCorrect = isSubjectQuestionCorrect(question);
+    if (isCorrect) {
+      correctCount += 1;
+    }
+
+    markSubjectQuestion(question, isCorrect);
+  });
+
+  const summaryType = correctCount === SUBJECT_ONE_QUESTIONS.length ? "success" : "error";
+  showSubjectResult(`判分完成：共 ${SUBJECT_ONE_QUESTIONS.length} 题，答对 ${correctCount} 题，答错 ${SUBJECT_ONE_QUESTIONS.length - correctCount} 题。`, summaryType);
+}
+
+function findFirstEmptySubjectControl() {
+  return Array.from(subjectQuestionList.querySelectorAll("input, select"))
+    .find(control => control.value.trim() === "");
+}
+
+function focusSubjectControl(control) {
+  const card = control.closest(".subject-question-card");
+  if (card) {
+    card.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+
+  window.setTimeout(() => {
+    try {
+      control.focus({ preventScroll: true });
+    } catch (error) {
+      control.focus();
+    }
+  }, 180);
+}
+
+function isSubjectQuestionCorrect(question) {
+  return question.fields.every(field => isSubjectFieldCorrect(question.id, field));
+}
+
+function isSubjectFieldCorrect(questionId, field) {
+  const control = subjectQuestionList.querySelector(`[data-question-id="${questionId}"][data-field-name="${field.name}"]`);
+  if (!control) {
+    return false;
+  }
+
+  if (field.type === "select") {
+    return control.value === field.answer;
+  }
+
+  const userValue = Number.parseFloat(control.value);
+  return Number.isFinite(userValue) && Math.abs(userValue - field.answer) < 0.001;
+}
+
+function markSubjectQuestion(question, isCorrect) {
+  const card = subjectQuestionList.querySelector(`[data-question-id="${question.id}"]`);
+  if (!card) {
+    return;
+  }
+
+  card.classList.toggle("correct", isCorrect);
+  card.classList.toggle("wrong", !isCorrect);
+
+  const feedback = card.querySelector(".question-feedback");
+  if (!feedback) {
+    return;
+  }
+
+  feedback.textContent = `${isCorrect ? "正确" : "错误"}。标准答案：${question.standardAnswer}`;
+  feedback.className = `question-feedback ${isCorrect ? "correct" : "wrong"}`;
+}
+
+function showSubjectResult(message, type, options = {}) {
+  const { scroll = true } = options;
+
+  subjectResultBox.textContent = message;
+  subjectResultBox.className = `result-box ${type}`;
+  subjectResultBox.classList.remove("hidden");
+
+  if (scroll) {
+    subjectResultBox.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+}
+
+function hideSubjectResult() {
+  subjectResultBox.textContent = "";
+  subjectResultBox.className = "result-box hidden";
+}
+
+function shuffle(array) {
+  for (let index = array.length - 1; index > 0; index -= 1) {
+    const randomIndex = Math.floor(Math.random() * (index + 1));
+    [array[index], array[randomIndex]] = [array[randomIndex], array[index]];
+  }
+}
