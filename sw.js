@@ -1,4 +1,4 @@
-const APP_VERSION = "20260430-mobile-primary-v7";
+const APP_VERSION = "20260430-subject-one-v8";
 const CACHE_NAME = `refrigeration-trainer-mobile-${APP_VERSION}`;
 
 const CORE_ASSETS = [

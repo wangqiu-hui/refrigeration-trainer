@@ -1,6 +1,6 @@
 const LETTERS = ["A", "B", "C", "D", "E", "F", "G", "H"];
 const STEP_COUNT = LETTERS.length;
-const ASSET_VERSION = "20260430-mobile-primary-v7";
+const ASSET_VERSION = "20260430-subject-one-v8";
 
 const FALLBACK_EXERCISES = {
   startup: {
@@ -31,9 +31,62 @@ const FALLBACK_EXERCISES = {
   }
 };
 
+const SUBJECT_ONE_QUESTIONS = [
+  {
+    id: "q1",
+    title: "题目1",
+    prompt: "中央空调冷水机组装置当前处于【自动控制制冷运行】模式，装置详细运行工况请移步装置自带控制屏做进一步查看。当前冷却风机（三相异步感应电动机）正在运行，其控制柜内端子排接线如下图所示：请选取合适的测量工具，对冷却风机 U-V 间电压进行测量操作，并将测量结果填入下框。",
+    answerPrefix: "测量结果：冷却风机 U-V 间电压值为",
+    standardAnswer: "420 V",
+    fields: [
+      { name: "voltageUV", label: "冷却风机 U-V 间电压值", unit: "V", type: "number", answer: 420 }
+    ]
+  },
+  {
+    id: "q2",
+    title: "题目2",
+    prompt: "中央空调冷水机组装置当前处于【自动控制制冷运行】模式，装置详细运行工况请移步装置自带控制屏做进一步查看。当前冷却水泵（单相异步感应电动机）正在运行，其控制柜内端子排接线如下图所示：请选取合适的测量工具，对冷却水泵运行电流进行测量操作，并将测量结果填入下框。",
+    answerPrefix: "测量结果：冷却水泵运行电流值",
+    standardAnswer: "5 A",
+    fields: [
+      { name: "current", label: "冷却水泵运行电流值", unit: "A", type: "number", answer: 5 }
+    ]
+  },
+  {
+    id: "q3",
+    title: "题目3",
+    prompt: "中央空调冷水机组装置中冷冻水泵（单相异步感应电动机）因某种原因导致无法正常工作，您可移步装置自带控制屏做进一步查看。现初步怀疑该水泵电机绝缘出现问题，导致其漏电保护装置动作而断电。请选择合适的测量工具，测量该水泵电机线圈对地绝缘电阻，并将测量结果输入下框。冷冻水泵供电电源已可靠断开，您可放心操作。",
+    standardAnswer: "300 MΩ，正常",
+    fields: [
+      { name: "insulation", label: "冷冻水泵电机线圈对地绝缘电阻", unit: "MΩ", type: "number", answer: 300 },
+      {
+        name: "judgement",
+        label: "您认为该水泵绝缘阻值正常吗？",
+        type: "select",
+        answer: "normal",
+        options: [
+          { value: "normal", label: "正常" },
+          { value: "abnormal", label: "不正常" }
+        ]
+      }
+    ]
+  },
+  {
+    id: "q4",
+    title: "题目4",
+    prompt: "中央空调冷水机组装置当前处于【自动控制制冷运行】模式，装置运行工况请移步制冷装置自带控制屏做进一步查看。请在测量工具箱中选择合适的仪表对制冷系统管道外壁温度进行测量，并将测量结果输入下框。",
+    standardAnswer: "回气管道外壁温度 25 ℃，排气管道外壁温度 25 ℃",
+    fields: [
+      { name: "suctionTemp", label: "回气管道外壁温度", unit: "℃", type: "number", answer: 25 },
+      { name: "dischargeTemp", label: "排气管道外壁温度", unit: "℃", type: "number", answer: 25 }
+    ]
+  }
+];
+
 let exercises = FALLBACK_EXERCISES;
 let currentExerciseKey = null;
 let currentSession = null;
+let subjectOneRendered = false;
 let roundNumber = 0;
 let activeAnswerIndex = 0;
 let activeAnswerSource = "auto";
@@ -46,26 +99,39 @@ const DUPLICATE_TAP_GUARD_MS = 650;
 
 const homeView = document.getElementById("homeView");
 const practiceView = document.getElementById("practiceView");
+const subjectOneView = document.getElementById("subjectOneView");
 const pageHint = document.getElementById("pageHint");
 const practiceTitle = document.getElementById("practiceTitle");
 const roundBadge = document.getElementById("roundBadge");
 const optionList = document.getElementById("optionList");
 const answerArea = document.getElementById("answerArea");
 const resultBox = document.getElementById("resultBox");
+const subjectQuestionList = document.getElementById("subjectQuestionList");
+const subjectResultBox = document.getElementById("subjectResultBox");
 
 const startupBtn = document.getElementById("startupBtn");
 const shutdownBtn = document.getElementById("shutdownBtn");
+const subjectOneBtn = document.getElementById("subjectOneBtn");
 const backBtn = document.getElementById("backBtn");
 const restartBtn = document.getElementById("restartBtn");
 const clearBtn = document.getElementById("clearBtn");
 const confirmBtn = document.getElementById("confirmBtn");
+const subjectBackBtn = document.getElementById("subjectBackBtn");
+const subjectRestartBtn = document.getElementById("subjectRestartBtn");
+const subjectClearBtn = document.getElementById("subjectClearBtn");
+const subjectConfirmBtn = document.getElementById("subjectConfirmBtn");
 
 startupBtn.addEventListener("click", () => startPractice("startup"));
 shutdownBtn.addEventListener("click", () => startPractice("shutdown"));
+subjectOneBtn.addEventListener("click", startSubjectOne);
 backBtn.addEventListener("click", showHome);
 restartBtn.addEventListener("click", restartPractice);
 clearBtn.addEventListener("click", clearAnswers);
 confirmBtn.addEventListener("click", confirmAnswers);
+subjectBackBtn.addEventListener("click", showHome);
+subjectRestartBtn.addEventListener("click", () => resetSubjectOne({ scroll: true }));
+subjectClearBtn.addEventListener("click", () => resetSubjectOne({ scroll: false }));
+subjectConfirmBtn.addEventListener("click", confirmSubjectOneAnswers);
 
 initApp();
 
@@ -143,8 +209,10 @@ function showHome() {
 
   homeView.classList.remove("hidden");
   practiceView.classList.add("hidden");
+  subjectOneView.classList.add("hidden");
   pageHint.textContent = "请选择练习类型";
   hideResult();
+  hideSubjectResult();
 
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
@@ -155,6 +223,7 @@ function startPractice(exerciseKey) {
   newRound();
 
   homeView.classList.add("hidden");
+  subjectOneView.classList.add("hidden");
   practiceView.classList.remove("hidden");
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
@@ -696,6 +765,244 @@ function showResult(message, type, options = {}) {
 function hideResult() {
   resultBox.textContent = "";
   resultBox.className = "result-box hidden";
+}
+
+
+function startSubjectOne() {
+  currentExerciseKey = null;
+  currentSession = null;
+  hideResult();
+
+  if (!subjectOneRendered) {
+    renderSubjectOneQuestions();
+    subjectOneRendered = true;
+  }
+
+  resetSubjectOne({ scroll: false });
+  homeView.classList.add("hidden");
+  practiceView.classList.add("hidden");
+  subjectOneView.classList.remove("hidden");
+  pageHint.textContent = "科目一测量题";
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function renderSubjectOneQuestions() {
+  subjectQuestionList.innerHTML = "";
+
+  SUBJECT_ONE_QUESTIONS.forEach((question, questionIndex) => {
+    const article = document.createElement("article");
+    article.className = "card subject-question-card";
+    article.dataset.questionId = question.id;
+    article.dataset.questionIndex = String(questionIndex);
+
+    const heading = document.createElement("h3");
+    heading.textContent = question.title;
+
+    const prompt = document.createElement("p");
+    prompt.className = "question-prompt";
+    prompt.textContent = question.prompt;
+
+    const fieldGroup = document.createElement("div");
+    fieldGroup.className = "subject-fields";
+
+    question.fields.forEach(field => {
+      fieldGroup.appendChild(createSubjectField(question, field));
+    });
+
+    const feedback = document.createElement("div");
+    feedback.className = "question-feedback hidden";
+    feedback.setAttribute("role", "status");
+
+    article.append(heading, prompt, fieldGroup, feedback);
+    subjectQuestionList.appendChild(article);
+  });
+}
+
+function createSubjectField(question, field) {
+  const wrapper = document.createElement("label");
+  wrapper.className = "subject-field";
+  wrapper.setAttribute("for", `${question.id}-${field.name}`);
+
+  const labelText = document.createElement("span");
+  labelText.className = "subject-field-label";
+  labelText.textContent = field.label;
+
+  let control;
+  if (field.type === "select") {
+    control = document.createElement("select");
+
+    const emptyOption = document.createElement("option");
+    emptyOption.value = "";
+    emptyOption.textContent = "请选择";
+    control.appendChild(emptyOption);
+
+    field.options.forEach(option => {
+      const optionEl = document.createElement("option");
+      optionEl.value = option.value;
+      optionEl.textContent = option.label;
+      control.appendChild(optionEl);
+    });
+  } else {
+    control = document.createElement("input");
+    control.type = "number";
+    control.inputMode = "decimal";
+    control.step = "any";
+    control.placeholder = "请输入测量值";
+  }
+
+  control.id = `${question.id}-${field.name}`;
+  control.dataset.questionId = question.id;
+  control.dataset.fieldName = field.name;
+  control.autocomplete = "off";
+  control.addEventListener("input", clearSubjectJudgementState);
+  control.addEventListener("change", clearSubjectJudgementState);
+
+  const controlWrap = document.createElement("span");
+  controlWrap.className = "subject-control-wrap";
+  controlWrap.appendChild(control);
+
+  if (field.unit) {
+    const unit = document.createElement("span");
+    unit.className = "subject-unit";
+    unit.textContent = field.unit;
+    controlWrap.appendChild(unit);
+  }
+
+  wrapper.append(labelText, controlWrap);
+  return wrapper;
+}
+
+function clearSubjectJudgementState() {
+  hideSubjectResult();
+
+  const card = this.closest(".subject-question-card");
+  if (card) {
+    card.classList.remove("correct", "wrong");
+    const feedback = card.querySelector(".question-feedback");
+    if (feedback) {
+      feedback.textContent = "";
+      feedback.className = "question-feedback hidden";
+    }
+  }
+}
+
+function resetSubjectOne(options = {}) {
+  const { scroll = false } = options;
+
+  for (const control of subjectQuestionList.querySelectorAll("input, select")) {
+    control.value = "";
+  }
+
+  for (const card of subjectQuestionList.querySelectorAll(".subject-question-card")) {
+    card.classList.remove("correct", "wrong");
+    const feedback = card.querySelector(".question-feedback");
+    if (feedback) {
+      feedback.textContent = "";
+      feedback.className = "question-feedback hidden";
+    }
+  }
+
+  hideSubjectResult();
+
+  if (scroll) {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+}
+
+function confirmSubjectOneAnswers() {
+  const firstEmptyControl = findFirstEmptySubjectControl();
+  if (firstEmptyControl) {
+    focusSubjectControl(firstEmptyControl);
+    showSubjectResult("请完成所有测量结果和判断后再确认", "warning");
+    return;
+  }
+
+  let correctCount = 0;
+
+  SUBJECT_ONE_QUESTIONS.forEach(question => {
+    const isCorrect = isSubjectQuestionCorrect(question);
+    if (isCorrect) {
+      correctCount += 1;
+    }
+
+    markSubjectQuestion(question, isCorrect);
+  });
+
+  const summaryType = correctCount === SUBJECT_ONE_QUESTIONS.length ? "success" : "error";
+  showSubjectResult(`判分完成：共 ${SUBJECT_ONE_QUESTIONS.length} 题，答对 ${correctCount} 题，答错 ${SUBJECT_ONE_QUESTIONS.length - correctCount} 题。`, summaryType);
+}
+
+function findFirstEmptySubjectControl() {
+  return Array.from(subjectQuestionList.querySelectorAll("input, select"))
+    .find(control => control.value.trim() === "");
+}
+
+function focusSubjectControl(control) {
+  const card = control.closest(".subject-question-card");
+  if (card) {
+    card.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+
+  window.setTimeout(() => {
+    try {
+      control.focus({ preventScroll: true });
+    } catch (error) {
+      control.focus();
+    }
+  }, 180);
+}
+
+function isSubjectQuestionCorrect(question) {
+  return question.fields.every(field => isSubjectFieldCorrect(question.id, field));
+}
+
+function isSubjectFieldCorrect(questionId, field) {
+  const control = subjectQuestionList.querySelector(`[data-question-id="${questionId}"][data-field-name="${field.name}"]`);
+  if (!control) {
+    return false;
+  }
+
+  if (field.type === "select") {
+    return control.value === field.answer;
+  }
+
+  const userValue = Number.parseFloat(control.value);
+  return Number.isFinite(userValue) && Math.abs(userValue - field.answer) < 0.001;
+}
+
+function markSubjectQuestion(question, isCorrect) {
+  const card = subjectQuestionList.querySelector(`[data-question-id="${question.id}"]`);
+  if (!card) {
+    return;
+  }
+
+  card.classList.toggle("correct", isCorrect);
+  card.classList.toggle("wrong", !isCorrect);
+
+  const feedback = card.querySelector(".question-feedback");
+  if (!feedback) {
+    return;
+  }
+
+  feedback.textContent = `${isCorrect ? "正确" : "错误"}。标准答案：${question.standardAnswer}`;
+  feedback.className = `question-feedback ${isCorrect ? "correct" : "wrong"}`;
+}
+
+function showSubjectResult(message, type, options = {}) {
+  const { scroll = true } = options;
+
+  subjectResultBox.textContent = message;
+  subjectResultBox.className = `result-box ${type}`;
+  subjectResultBox.classList.remove("hidden");
+
+  if (scroll) {
+    subjectResultBox.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+}
+
+function hideSubjectResult() {
+  subjectResultBox.textContent = "";
+  subjectResultBox.className = "result-box hidden";
 }
 
 function shuffle(array) {
