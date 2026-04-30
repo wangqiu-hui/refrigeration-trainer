@@ -1,6 +1,6 @@
 const LETTERS = ["A", "B", "C", "D", "E", "F", "G", "H"];
 const STEP_COUNT = LETTERS.length;
-const ASSET_VERSION = "20260430-mobile-tap-reliability-v6";
+const ASSET_VERSION = "20260430-mobile-primary-v7";
 
 const FALLBACK_EXERCISES = {
   startup: {
@@ -37,10 +37,11 @@ let currentSession = null;
 let roundNumber = 0;
 let activeAnswerIndex = 0;
 let activeAnswerSource = "auto";
-let optionPointerStart = null;
+let pendingOptionTap = null;
 let lastOptionActivation = { letter: "", time: 0, source: "" };
 
-const TAP_MOVE_TOLERANCE_PX = 24;
+const TAP_MOVE_TOLERANCE_PX = 48;
+const TAP_MAX_DURATION_MS = 1500;
 const DUPLICATE_TAP_GUARD_MS = 650;
 
 const homeView = document.getElementById("homeView");
@@ -138,6 +139,7 @@ function showHome() {
   activeAnswerIndex = 0;
   activeAnswerSource = "auto";
   lastOptionActivation = { letter: "", time: 0, source: "" };
+  pendingOptionTap = null;
 
   homeView.classList.remove("hidden");
   practiceView.classList.add("hidden");
@@ -187,6 +189,7 @@ function newRound() {
   activeAnswerIndex = 0;
   activeAnswerSource = "auto";
   lastOptionActivation = { letter: "", time: 0, source: "" };
+  pendingOptionTap = null;
   currentSession = {
     title: exercise.title,
     optionMap,
@@ -239,42 +242,56 @@ function renderOptions() {
 function bindOptionActivationEvents(optionButton) {
   if (window.PointerEvent) {
     optionButton.addEventListener("pointerdown", handleOptionPointerDown, { passive: true });
-    optionButton.addEventListener("pointerup", handleOptionPointerUp);
-    optionButton.addEventListener("pointercancel", clearOptionPointerStart);
-    optionButton.addEventListener("lostpointercapture", clearOptionPointerStart);
+    optionButton.addEventListener("pointerup", handleOptionPointerUp, { passive: false });
+    optionButton.addEventListener("pointercancel", cancelPendingOptionTap);
+    optionButton.addEventListener("lostpointercapture", cancelPendingOptionTap);
   } else {
     optionButton.addEventListener("touchstart", handleOptionTouchStart, { passive: true });
     optionButton.addEventListener("touchend", handleOptionTouchEnd, { passive: false });
-    optionButton.addEventListener("touchcancel", clearOptionPointerStart);
+    optionButton.addEventListener("touchcancel", cancelPendingOptionTap);
   }
 
-  // click 作为桌面端和个别旧浏览器的兜底。移动端 pointerup/touchend 后会产生合成 click，
-  // activateOptionButton 内部会去重，避免一次点击填两次。
+  // click 是最后兜底：桌面浏览器、个别旧版手机浏览器、以及被浏览器重新合成的点击都会走这里。
+  // activateOptionButton 会过滤 pointer/touch 后紧跟的合成 click，避免一次轻点填两次。
   optionButton.addEventListener("click", handleOptionClick);
 }
 
 function handleOptionPointerDown(event) {
-  if (!event.isPrimary || event.button > 0) {
-    return;
-  }
-
-  optionPointerStart = {
-    button: event.currentTarget,
-    pointerId: event.pointerId,
-    x: event.clientX,
-    y: event.clientY
-  };
-}
-
-function handleOptionPointerUp(event) {
-  if (!event.isPrimary || event.button > 0) {
+  if (!event.isPrimary || (event.pointerType === "mouse" && event.button !== 0)) {
     return;
   }
 
   const optionButton = event.currentTarget;
-  const isSamePointer = optionPointerStart && optionPointerStart.pointerId === event.pointerId;
-  const isTap = isSamePointer && isTapWithinTolerance(optionButton, event.clientX, event.clientY);
-  clearOptionPointerStart();
+  pendingOptionTap = {
+    button: optionButton,
+    pointerId: event.pointerId,
+    x: event.clientX,
+    y: event.clientY,
+    time: getNow()
+  };
+
+  optionButton.classList.add("pressing");
+
+  // 手机上手指会有轻微滑动；不捕获指针时，pointerup 可能落到别的元素上，表现为“点了没反应”。
+  // 捕获后，后续 pointerup 仍会回到这个选项按钮，再按位移判断是真点击还是滚动。
+  try {
+    if (typeof optionButton.setPointerCapture === "function") {
+      optionButton.setPointerCapture(event.pointerId);
+    }
+  } catch (error) {
+    // 某些浏览器/时机会拒绝捕获，click 兜底仍然可用。
+  }
+}
+
+function handleOptionPointerUp(event) {
+  if (!event.isPrimary || (event.pointerType === "mouse" && event.button !== 0)) {
+    return;
+  }
+
+  const optionButton = event.currentTarget;
+  const isTap = isPendingOptionTap(optionButton, event.pointerId, event.clientX, event.clientY);
+  releaseOptionPointerCapture(optionButton, event.pointerId);
+  cancelPendingOptionTap();
 
   if (!isTap) {
     return;
@@ -285,17 +302,24 @@ function handleOptionPointerUp(event) {
 }
 
 function handleOptionTouchStart(event) {
+  if (window.PointerEvent) {
+    return;
+  }
+
   const touch = event.changedTouches && event.changedTouches[0];
   if (!touch) {
     return;
   }
 
-  optionPointerStart = {
+  pendingOptionTap = {
     button: event.currentTarget,
     pointerId: touch.identifier,
     x: touch.clientX,
-    y: touch.clientY
+    y: touch.clientY,
+    time: getNow()
   };
+
+  event.currentTarget.classList.add("pressing");
 }
 
 function handleOptionTouchEnd(event) {
@@ -309,9 +333,8 @@ function handleOptionTouchEnd(event) {
   }
 
   const optionButton = event.currentTarget;
-  const isSamePointer = optionPointerStart && optionPointerStart.pointerId === touch.identifier;
-  const isTap = isSamePointer && isTapWithinTolerance(optionButton, touch.clientX, touch.clientY);
-  clearOptionPointerStart();
+  const isTap = isPendingOptionTap(optionButton, touch.identifier, touch.clientX, touch.clientY);
+  cancelPendingOptionTap();
 
   if (!isTap) {
     return;
@@ -338,7 +361,6 @@ function activateOptionButton(optionButton, source = "click") {
   const now = getNow();
   const isSyntheticClickAfterTouch = source === "click"
     && lastOptionActivation.source !== "click"
-    && lastOptionActivation.letter === letter
     && now - lastOptionActivation.time < DUPLICATE_TAP_GUARD_MS;
 
   if (isSyntheticClickAfterTouch) {
@@ -349,18 +371,34 @@ function activateOptionButton(optionButton, source = "click") {
   chooseOptionLetter(letter);
 }
 
-function isTapWithinTolerance(optionButton, clientX, clientY) {
-  if (!optionPointerStart || optionPointerStart.button !== optionButton) {
+function isPendingOptionTap(optionButton, pointerId, clientX, clientY) {
+  if (!pendingOptionTap || pendingOptionTap.button !== optionButton || pendingOptionTap.pointerId !== pointerId) {
     return false;
   }
 
-  const movedX = Math.abs(clientX - optionPointerStart.x);
-  const movedY = Math.abs(clientY - optionPointerStart.y);
-  return movedX <= TAP_MOVE_TOLERANCE_PX && movedY <= TAP_MOVE_TOLERANCE_PX;
+  const movedX = Math.abs(clientX - pendingOptionTap.x);
+  const movedY = Math.abs(clientY - pendingOptionTap.y);
+  const duration = getNow() - pendingOptionTap.time;
+  return movedX <= TAP_MOVE_TOLERANCE_PX
+    && movedY <= TAP_MOVE_TOLERANCE_PX
+    && duration <= TAP_MAX_DURATION_MS;
 }
 
-function clearOptionPointerStart() {
-  optionPointerStart = null;
+function cancelPendingOptionTap() {
+  if (pendingOptionTap && pendingOptionTap.button) {
+    pendingOptionTap.button.classList.remove("pressing");
+  }
+  pendingOptionTap = null;
+}
+
+function releaseOptionPointerCapture(optionButton, pointerId) {
+  try {
+    if (typeof optionButton.releasePointerCapture === "function" && optionButton.hasPointerCapture(pointerId)) {
+      optionButton.releasePointerCapture(pointerId);
+    }
+  } catch (error) {
+    // 忽略释放失败；浏览器会在 pointerup 后自动释放。
+  }
 }
 
 function getNow() {
@@ -385,25 +423,12 @@ function chooseOptionLetter(letter) {
     return;
   }
 
-  const existingIndex = selects.findIndex(select => select.value === letter);
-  const isMovingUsedLetter = existingIndex !== -1 && existingIndex !== targetIndex;
-  const shouldRequireExplicitTarget = isMovingUsedLetter && activeAnswerSource !== "user";
+  const previousIndex = selects.findIndex(select => select.value === letter);
 
-  if (shouldRequireExplicitTarget) {
-    const existingSelect = selects[existingIndex];
-    const existingStepNumber = existingIndex + 1;
-
-    updateOptionSelectedStates();
-    showResult(`选项 ${letter} 已在第 ${existingStepNumber} 步使用；如需移动，请先点击目标步骤`, "warning", { scroll: false });
-    flashAnswerCell(existingSelect, { scroll: false });
-    return;
-  }
-
-  // 如果这个字母曾被学生填在别的位置，且本次是明确修改目标步骤，则先移除旧位置，保证不会重复选择。
-  for (const select of selects) {
-    if (select !== targetSelect && select.value === letter) {
-      clearSelectValue(select);
-    }
+  // 移动端交互规则必须简单：点哪个字母，就把哪个字母放到当前高亮步骤。
+  // 如果这个字母已经在别的步骤，直接移动过来并清空旧位置，避免“点了但没选中”的错觉。
+  if (previousIndex !== -1 && previousIndex !== targetIndex) {
+    clearSelectValue(selects[previousIndex]);
   }
 
   targetSelect.value = letter;
@@ -416,8 +441,9 @@ function chooseOptionLetter(letter) {
   setActiveAnswerIndex(nextEmptyIndex ?? targetIndex, { source: "auto", scroll: false, focus: false });
 
   const targetStepNumber = targetIndex + 1;
-  const nextStepText = nextEmptyIndex === null ? "" : `，下一步请填写第 ${nextEmptyIndex + 1} 步`;
-  showResult(`已将选项 ${letter} 填入第 ${targetStepNumber} 步${nextStepText}`, "success", { scroll: false });
+  const movedText = previousIndex !== -1 && previousIndex !== targetIndex ? `，并已从第 ${previousIndex + 1} 步移除` : "";
+  const nextStepText = nextEmptyIndex === null ? "" : `；下一步请填写第 ${nextEmptyIndex + 1} 步`;
+  showResult(`已将选项 ${letter} 填入第 ${targetStepNumber} 步${movedText}${nextStepText}`, "success", { scroll: false });
 }
 
 function resolveActiveAnswerIndex(selects) {

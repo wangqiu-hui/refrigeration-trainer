@@ -246,6 +246,12 @@ h3 {
   background: #eef7ff;
 }
 
+.option-item.pressing {
+  border-color: rgba(23, 105, 170, 0.68);
+  background: #eef7ff;
+  transform: scale(0.992);
+}
+
 .option-item.selected {
   border-color: #0f766e;
   background: #e5f7ed;
