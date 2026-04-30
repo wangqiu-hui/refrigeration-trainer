@@ -1,4 +1,6 @@
 const LETTERS = ["A", "B", "C", "D", "E", "F", "G", "H"];
+const STEP_COUNT = LETTERS.length;
+const ASSET_VERSION = "20260430-option-target-fix";
 
 const FALLBACK_EXERCISES = {
   startup: {
@@ -61,7 +63,7 @@ initApp();
 
 async function initApp() {
   try {
-    const response = await fetch("steps.json", { cache: "no-cache" });
+    const response = await fetch(`steps.json?v=${ASSET_VERSION}`, { cache: "no-cache" });
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`);
     }
@@ -83,8 +85,18 @@ function registerServiceWorker() {
     return;
   }
 
+  let hasReloadedForNewServiceWorker = false;
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (hasReloadedForNewServiceWorker) {
+      return;
+    }
+
+    hasReloadedForNewServiceWorker = true;
+    window.location.reload();
+  });
+
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("sw.js").catch(error => {
+    navigator.serviceWorker.register(`sw.js?v=${ASSET_VERSION}`).catch(error => {
       console.warn("Service Worker 注册失败：", error);
     });
   });
@@ -100,8 +112,8 @@ function validateExercises(data) {
       throw new Error(`${key}.title 必须是非空字符串`);
     }
 
-    if (!Array.isArray(data[key].steps) || data[key].steps.length !== 8) {
-      throw new Error(`${key}.steps 必须包含 8 个步骤`);
+    if (!Array.isArray(data[key].steps) || data[key].steps.length !== STEP_COUNT) {
+      throw new Error(`${key}.steps 必须包含 ${STEP_COUNT} 个步骤`);
     }
 
     for (const step of data[key].steps) {
@@ -152,13 +164,13 @@ function newRound() {
 
   const optionMap = {};
   const indexToLetter = {};
-  const letterToStepIndex = {};
+  const optionTargets = {};
 
   LETTERS.forEach((letter, index) => {
     const item = indexedSteps[index];
     optionMap[letter] = item.text;
     indexToLetter[item.originalIndex] = letter;
-    letterToStepIndex[letter] = item.originalIndex;
+    optionTargets[letter] = item.originalIndex;
   });
 
   const correctLetters = exercise.steps.map((_, index) => indexToLetter[index]);
@@ -168,7 +180,7 @@ function newRound() {
     title: exercise.title,
     optionMap,
     correctLetters,
-    letterToStepIndex
+    optionTargets
   };
 
   renderPractice();
@@ -189,7 +201,7 @@ function renderOptions() {
   optionList.innerHTML = "";
 
   for (const letter of LETTERS) {
-    const stepIndex = currentSession.letterToStepIndex[letter];
+    const stepIndex = currentSession.optionTargets[letter];
     const stepNumber = stepIndex + 1;
 
     const item = document.createElement("button");
@@ -202,7 +214,7 @@ function renderOptions() {
       "aria-label",
       `选择 ${letter}：自动填入第 ${stepNumber} 步。${currentSession.optionMap[letter]}`
     );
-    item.addEventListener("click", () => chooseOptionLetter(letter));
+    item.addEventListener("click", handleOptionClick);
 
     const letterEl = document.createElement("span");
     letterEl.className = "option-letter";
@@ -217,17 +229,33 @@ function renderOptions() {
   }
 }
 
-function chooseOptionLetter(letter) {
+function handleOptionClick(event) {
+  const optionButton = event.currentTarget;
+  const letter = optionButton.dataset.letter;
+  const targetIndex = Number.parseInt(optionButton.dataset.targetIndex, 10);
+
+  chooseOptionLetter(letter, targetIndex);
+}
+
+function chooseOptionLetter(letter, targetIndexFromOption = null) {
   if (!currentSession || !LETTERS.includes(letter)) {
     return;
   }
 
-  const targetIndex = currentSession.letterToStepIndex[letter];
+  const fallbackTargetIndex = currentSession.optionTargets[letter];
+  const targetIndex = Number.isInteger(targetIndexFromOption) ? targetIndexFromOption : fallbackTargetIndex;
+
+  if (!Number.isInteger(targetIndex) || targetIndex < 0 || targetIndex >= STEP_COUNT) {
+    console.warn("选项目标步骤无效：", { letter, targetIndex, fallbackTargetIndex });
+    return;
+  }
+
   const stepNumber = targetIndex + 1;
   const selects = Array.from(answerArea.querySelectorAll("select"));
-  const targetSelect = selects[targetIndex];
+  const targetSelect = document.getElementById(`answer-${targetIndex}`);
 
   if (!targetSelect) {
+    console.warn("未找到目标步骤下拉框：", { letter, targetIndex });
     return;
   }
 
@@ -235,7 +263,7 @@ function chooseOptionLetter(letter) {
   for (const select of selects) {
     if (select !== targetSelect && select.value === letter) {
       select.value = "";
-      select.closest(".answer-cell")?.classList.remove("manual-filled");
+      select.closest(".answer-cell")?.classList.remove("manual-filled", "just-filled");
     }
   }
 
@@ -277,7 +305,7 @@ function flashAnswerCell(select) {
 function renderAnswers() {
   answerArea.innerHTML = "";
 
-  for (let index = 0; index < 8; index += 1) {
+  for (let index = 0; index < STEP_COUNT; index += 1) {
     const cell = document.createElement("div");
     cell.className = "answer-cell";
 

@@ -2,7 +2,7 @@
   "name": "制冷装置操作顺序练习软件",
   "short_name": "制冷练习",
   "description": "用于训练制冷装置开机和停机操作顺序的手机练习软件",
-  "start_url": "./index.html",
+  "start_url": "./index.html?v=20260430-option-target-fix",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait-primary",

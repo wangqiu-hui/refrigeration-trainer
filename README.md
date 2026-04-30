@@ -150,3 +150,17 @@ const CACHE_NAME = "refrigeration-trainer-mobile-v3";
 ## 注意
 
 直接双击 `index.html` 也能看到页面，并且 `app.js` 内置了备用步骤数据；但为了测试 `steps.json`、PWA 和离线缓存，请使用 `python -m http.server 8000` 或部署到 HTTPS 网站。
+
+## 本次修正说明（20260430-option-target-fix）
+
+本版本重点修正手机端点击选项文字后，字母没有填入真实目标步骤的问题。
+
+修正点：
+
+- 选项按钮渲染时，直接把该选项对应的真实步骤索引写入 `data-target-index`。
+- 点击选项时，通过 `event.currentTarget` 读取被点击按钮自身的 `data-letter` 和 `data-target-index`，不再依赖下拉框 NodeList 顺序推断目标位置。
+- 自动填入时使用 `document.getElementById('answer-N')` 精确定位“第 N+1 步”的下拉框，避免手机端布局变化造成错位感或误填。
+- 为 `index.html` 的 `style.css`、`app.js`、`manifest.webmanifest` 增加版本参数，降低手机浏览器旧缓存影响。
+- 将 Service Worker 缓存版本升级为 `refrigeration-trainer-mobile-20260430-option-target-fix`，并对核心文件使用 network-first 策略，发布后手机端更容易拿到新代码。
+
+更新到 GitHub Pages 后，如果个别手机仍显示旧页面，请让学生关闭浏览器标签页后重新扫码；PWA 已添加到桌面的，需要重新打开一次或在浏览器中清除该站点缓存。
