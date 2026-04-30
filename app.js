@@ -1,6 +1,6 @@
 const LETTERS = ["A", "B", "C", "D", "E", "F", "G", "H"];
 const STEP_COUNT = LETTERS.length;
-const ASSET_VERSION = "20260430-option-target-fix";
+const ASSET_VERSION = "20260430-sequential-fill-fix";
 
 const FALLBACK_EXERCISES = {
   startup: {
@@ -35,6 +35,8 @@ let exercises = FALLBACK_EXERCISES;
 let currentExerciseKey = null;
 let currentSession = null;
 let roundNumber = 0;
+let activeAnswerIndex = 0;
+let activeAnswerSource = "auto";
 
 const homeView = document.getElementById("homeView");
 const practiceView = document.getElementById("practiceView");
@@ -128,6 +130,8 @@ function showHome() {
   currentExerciseKey = null;
   currentSession = null;
   roundNumber = 0;
+  activeAnswerIndex = 0;
+  activeAnswerSource = "auto";
 
   homeView.classList.remove("hidden");
   practiceView.classList.add("hidden");
@@ -164,23 +168,22 @@ function newRound() {
 
   const optionMap = {};
   const indexToLetter = {};
-  const optionTargets = {};
 
   LETTERS.forEach((letter, index) => {
     const item = indexedSteps[index];
     optionMap[letter] = item.text;
     indexToLetter[item.originalIndex] = letter;
-    optionTargets[letter] = item.originalIndex;
   });
 
   const correctLetters = exercise.steps.map((_, index) => indexToLetter[index]);
 
   roundNumber += 1;
+  activeAnswerIndex = 0;
+  activeAnswerSource = "auto";
   currentSession = {
     title: exercise.title,
     optionMap,
-    correctLetters,
-    optionTargets
+    correctLetters
   };
 
   renderPractice();
@@ -194,6 +197,7 @@ function renderPractice() {
 
   renderOptions();
   renderAnswers();
+  setActiveAnswerIndex(0, { source: "auto", scroll: false, focus: false });
   updateOptionSelectedStates();
 }
 
@@ -201,18 +205,14 @@ function renderOptions() {
   optionList.innerHTML = "";
 
   for (const letter of LETTERS) {
-    const stepIndex = currentSession.optionTargets[letter];
-    const stepNumber = stepIndex + 1;
-
     const item = document.createElement("button");
     item.type = "button";
     item.className = "option-item";
     item.dataset.letter = letter;
-    item.dataset.targetIndex = String(stepIndex);
     item.setAttribute("aria-pressed", "false");
     item.setAttribute(
       "aria-label",
-      `选择 ${letter}：自动填入第 ${stepNumber} 步。${currentSession.optionMap[letter]}`
+      `选择 ${letter}，填入当前高亮的作答步骤。${currentSession.optionMap[letter]}`
     );
     item.addEventListener("click", handleOptionClick);
 
@@ -232,38 +232,42 @@ function renderOptions() {
 function handleOptionClick(event) {
   const optionButton = event.currentTarget;
   const letter = optionButton.dataset.letter;
-  const targetIndex = Number.parseInt(optionButton.dataset.targetIndex, 10);
 
-  chooseOptionLetter(letter, targetIndex);
+  chooseOptionLetter(letter);
 }
 
-function chooseOptionLetter(letter, targetIndexFromOption = null) {
+function chooseOptionLetter(letter) {
   if (!currentSession || !LETTERS.includes(letter)) {
     return;
   }
 
-  const fallbackTargetIndex = currentSession.optionTargets[letter];
-  const targetIndex = Number.isInteger(targetIndexFromOption) ? targetIndexFromOption : fallbackTargetIndex;
-
-  if (!Number.isInteger(targetIndex) || targetIndex < 0 || targetIndex >= STEP_COUNT) {
-    console.warn("选项目标步骤无效：", { letter, targetIndex, fallbackTargetIndex });
-    return;
-  }
-
-  const stepNumber = targetIndex + 1;
-  const selects = Array.from(answerArea.querySelectorAll("select"));
-  const targetSelect = document.getElementById(`answer-${targetIndex}`);
+  const selects = getAnswerSelects();
+  const targetIndex = resolveActiveAnswerIndex(selects);
+  const targetSelect = selects[targetIndex];
 
   if (!targetSelect) {
-    console.warn("未找到目标步骤下拉框：", { letter, targetIndex });
+    console.warn("未找到当前作答步骤下拉框：", { letter, targetIndex });
     return;
   }
 
-  // 如果这个字母曾被学生手动填在别的位置，先移除，保证不会重复选择。
+  const existingIndex = selects.findIndex(select => select.value === letter);
+  const isMovingUsedLetter = existingIndex !== -1 && existingIndex !== targetIndex;
+  const shouldRequireExplicitTarget = isMovingUsedLetter && activeAnswerSource !== "user";
+
+  if (shouldRequireExplicitTarget) {
+    const existingSelect = selects[existingIndex];
+    const existingStepNumber = existingIndex + 1;
+
+    updateOptionSelectedStates();
+    showResult(`选项 ${letter} 已在第 ${existingStepNumber} 步使用；如需移动，请先点击目标步骤`, "warning");
+    flashAnswerCell(existingSelect, { scroll: true });
+    return;
+  }
+
+  // 如果这个字母曾被学生填在别的位置，且本次是明确修改目标步骤，则先移除旧位置，保证不会重复选择。
   for (const select of selects) {
     if (select !== targetSelect && select.value === letter) {
-      select.value = "";
-      select.closest(".answer-cell")?.classList.remove("manual-filled", "just-filled");
+      clearSelectValue(select);
     }
   }
 
@@ -271,8 +275,83 @@ function chooseOptionLetter(letter, targetIndexFromOption = null) {
   targetSelect.closest(".answer-cell")?.classList.add("manual-filled");
 
   updateOptionSelectedStates();
-  showResult(`已将选项 ${letter} 自动填入第 ${stepNumber} 步`, "success");
-  flashAnswerCell(targetSelect);
+  flashAnswerCell(targetSelect, { scroll: true });
+
+  const nextEmptyIndex = findNextEmptyIndex(targetIndex + 1, selects);
+  setActiveAnswerIndex(nextEmptyIndex ?? targetIndex, { source: "auto", scroll: false, focus: false });
+
+  const targetStepNumber = targetIndex + 1;
+  const nextStepText = nextEmptyIndex === null ? "" : `，下一步请填写第 ${nextEmptyIndex + 1} 步`;
+  showResult(`已将选项 ${letter} 填入第 ${targetStepNumber} 步${nextStepText}`, "success", { scroll: false });
+}
+
+function resolveActiveAnswerIndex(selects) {
+  if (Number.isInteger(activeAnswerIndex) && activeAnswerIndex >= 0 && activeAnswerIndex < selects.length) {
+    return activeAnswerIndex;
+  }
+
+  const firstEmptyIndex = findNextEmptyIndex(0, selects);
+  return firstEmptyIndex ?? 0;
+}
+
+function getAnswerSelects() {
+  return Array.from(answerArea.querySelectorAll("select"));
+}
+
+function findNextEmptyIndex(startIndex = 0, selects = getAnswerSelects()) {
+  if (selects.length === 0) {
+    return null;
+  }
+
+  for (let offset = 0; offset < selects.length; offset += 1) {
+    const index = (startIndex + offset) % selects.length;
+    if (selects[index].value === "") {
+      return index;
+    }
+  }
+
+  return null;
+}
+
+function setActiveAnswerIndex(index, options = {}) {
+  const { source = "user", scroll = false, focus = false } = options;
+  const selects = getAnswerSelects();
+
+  if (!Number.isInteger(index) || index < 0 || index >= selects.length) {
+    return;
+  }
+
+  activeAnswerIndex = index;
+  activeAnswerSource = source;
+  syncActiveAnswerCell();
+
+  const activeSelect = selects[index];
+  const activeCell = activeSelect.closest(".answer-cell");
+
+  if (focus) {
+    try {
+      activeSelect.focus({ preventScroll: !scroll });
+    } catch (error) {
+      activeSelect.focus();
+    }
+  }
+
+  if (scroll && activeCell) {
+    activeCell.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+}
+
+function syncActiveAnswerCell() {
+  for (const cell of answerArea.querySelectorAll(".answer-cell")) {
+    const isActive = Number.parseInt(cell.dataset.index, 10) === activeAnswerIndex;
+    cell.classList.toggle("active", isActive);
+    cell.setAttribute("aria-current", isActive ? "step" : "false");
+  }
+}
+
+function clearSelectValue(select) {
+  select.value = "";
+  select.closest(".answer-cell")?.classList.remove("manual-filled", "just-filled");
 }
 
 function updateOptionSelectedStates() {
@@ -285,7 +364,8 @@ function updateOptionSelectedStates() {
   }
 }
 
-function flashAnswerCell(select) {
+function flashAnswerCell(select, options = {}) {
+  const { scroll = true } = options;
   const cell = select.closest(".answer-cell");
   if (!cell) {
     return;
@@ -295,7 +375,10 @@ function flashAnswerCell(select) {
   // 触发一次重绘，确保连续点击时高亮动画也能重新播放。
   void cell.offsetWidth;
   cell.classList.add("just-filled");
-  cell.scrollIntoView({ behavior: "smooth", block: "center" });
+
+  if (scroll) {
+    cell.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
 
   window.setTimeout(() => {
     cell.classList.remove("just-filled");
@@ -308,6 +391,9 @@ function renderAnswers() {
   for (let index = 0; index < STEP_COUNT; index += 1) {
     const cell = document.createElement("div");
     cell.className = "answer-cell";
+    cell.dataset.index = String(index);
+    cell.addEventListener("pointerdown", () => setActiveAnswerIndex(index, { source: "user", scroll: false, focus: false }));
+    cell.addEventListener("click", () => setActiveAnswerIndex(index, { source: "user", scroll: false, focus: false }));
 
     const label = document.createElement("label");
     label.setAttribute("for", `answer-${index}`);
@@ -330,6 +416,8 @@ function renderAnswers() {
       select.appendChild(option);
     }
 
+    select.addEventListener("pointerdown", () => setActiveAnswerIndex(index, { source: "user", scroll: false, focus: false }));
+    select.addEventListener("focus", () => setActiveAnswerIndex(index, { source: "user", scroll: false, focus: false }));
     select.addEventListener("change", handleAnswerChange);
 
     cell.append(label, select);
@@ -338,8 +426,12 @@ function renderAnswers() {
 }
 
 function handleAnswerChange(event) {
-  const selectedValue = event.target.value;
-  const cell = event.target.closest(".answer-cell");
+  const select = event.currentTarget;
+  const selectedValue = select.value;
+  const currentIndex = Number.parseInt(select.dataset.index, 10);
+  const cell = select.closest(".answer-cell");
+
+  setActiveAnswerIndex(currentIndex, { source: "user", scroll: false, focus: false });
 
   if (!selectedValue) {
     cell?.classList.remove("manual-filled");
@@ -352,15 +444,19 @@ function handleAnswerChange(event) {
   const count = userLetters.filter(letter => letter === selectedValue).length;
 
   if (count > 1) {
-    event.target.value = "";
+    select.value = "";
     cell?.classList.remove("manual-filled");
     updateOptionSelectedStates();
     showResult("不能重复选择同一个选项", "warning");
-  } else {
-    cell?.classList.add("manual-filled");
-    updateOptionSelectedStates();
-    hideResult();
+    return;
   }
+
+  cell?.classList.add("manual-filled");
+  updateOptionSelectedStates();
+  hideResult();
+
+  const nextEmptyIndex = findNextEmptyIndex(currentIndex + 1);
+  setActiveAnswerIndex(nextEmptyIndex ?? currentIndex, { source: "auto", scroll: false, focus: false });
 }
 
 function getUserLetters() {
@@ -369,10 +465,10 @@ function getUserLetters() {
 
 function clearAnswers() {
   for (const select of answerArea.querySelectorAll("select")) {
-    select.value = "";
-    select.closest(".answer-cell")?.classList.remove("manual-filled", "just-filled");
+    clearSelectValue(select);
   }
 
+  setActiveAnswerIndex(0, { source: "auto", scroll: false, focus: false });
   updateOptionSelectedStates();
   hideResult();
 }
@@ -385,6 +481,8 @@ function confirmAnswers() {
   const userLetters = getUserLetters();
 
   if (userLetters.some(letter => letter === "")) {
+    const firstEmptyIndex = userLetters.findIndex(letter => letter === "");
+    setActiveAnswerIndex(firstEmptyIndex, { source: "auto", scroll: true, focus: false });
     showResult("请完成所有步骤后再确认", "warning");
     return;
   }
@@ -421,11 +519,16 @@ function confirmAnswers() {
   );
 }
 
-function showResult(message, type) {
+function showResult(message, type, options = {}) {
+  const { scroll = true } = options;
+
   resultBox.textContent = message;
   resultBox.className = `result-box ${type}`;
   resultBox.classList.remove("hidden");
-  resultBox.scrollIntoView({ behavior: "smooth", block: "nearest" });
+
+  if (scroll) {
+    resultBox.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
 }
 
 function hideResult() {

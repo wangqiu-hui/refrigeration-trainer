@@ -8,8 +8,8 @@
 
   <title>制冷装置操作顺序练习软件</title>
 
-  <link rel="stylesheet" href="style.css?v=20260430-option-target-fix" />
-  <link rel="manifest" href="manifest.webmanifest?v=20260430-option-target-fix" />
+  <link rel="stylesheet" href="style.css?v=20260430-sequential-fill-fix" />
+  <link rel="manifest" href="manifest.webmanifest?v=20260430-sequential-fill-fix" />
   <link rel="icon" href="icons/icon-192.png" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
 </head>
@@ -28,7 +28,7 @@
     <main>
       <section id="homeView" class="view card home-card">
         <h2>选择练习</h2>
-        <p class="muted">每次进入练习都会随机打乱 8 个步骤。点击上方任意选项文字，系统会根据该步骤的真实顺序，自动填入下方对应的“第 N 步”。也可以手动选择 A-H。</p>
+        <p class="muted">每次进入练习都会随机打乱 8 个步骤。点击上方任意选项文字，会把该字母填入当前高亮的作答步骤；刚进入时默认填第 1 步，填完后自动跳到下一空白步骤。也可以手动选择 A-H。</p>
 
         <div class="home-actions">
           <button type="button" class="primary-btn" id="startupBtn">开机练习</button>
@@ -49,13 +49,13 @@
         <section class="card practice-title-card">
           <div>
             <h2 id="practiceTitle">练习</h2>
-            <p class="muted">先阅读 A-H 选项；点击上方任意选项文字，会自动填入下方对应的“第 N 步”。</p>
+            <p class="muted">先阅读 A-H 选项；点击上方任意选项文字，会填入当前高亮的步骤。刚开始默认是第 1 步，填完后自动跳到下一空白步骤。</p>
           </div>
           <span id="roundBadge" class="round-badge">第 1 轮</span>
         </section>
 
         <section class="card">
-          <h3>选项区：点击文字自动填入对应步骤</h3>
+          <h3>选项区：点击文字填入当前/下一空白步骤</h3>
           <div id="optionList" class="option-list"></div>
         </section>
 
@@ -78,6 +78,6 @@
     </footer>
   </div>
 
-  <script src="app.js?v=20260430-option-target-fix" defer></script>
+  <script src="app.js?v=20260430-sequential-fill-fix" defer></script>
 </body>
 </html>

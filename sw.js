@@ -1,4 +1,4 @@
-const APP_VERSION = "20260430-option-target-fix";
+const APP_VERSION = "20260430-sequential-fill-fix";
 const CACHE_NAME = `refrigeration-trainer-mobile-${APP_VERSION}`;
 
 const CORE_ASSETS = [
@@ -44,6 +44,11 @@ self.addEventListener("fetch", event => {
   const request = event.request;
 
   if (request.method !== "GET") {
+    return;
+  }
+
+  const url = new URL(request.url);
+  if (url.origin !== self.location.origin) {
     return;
   }
 
