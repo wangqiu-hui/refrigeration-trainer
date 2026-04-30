@@ -1,6 +1,6 @@
 const LETTERS = ["A", "B", "C", "D", "E", "F", "G", "H"];
 const STEP_COUNT = LETTERS.length;
-const ASSET_VERSION = "20260430-mobile-primary-v11-fixed-mobile";
+const ASSET_VERSION = "20260501-subject3-mobile-v12";
 
 const FALLBACK_EXERCISES = {
   startup: {
@@ -118,10 +118,16 @@ const modalRoot = document.getElementById("modalRoot");
 const appShell = document.querySelector(".app-shell");
 const subjectQuestionList = document.getElementById("subjectQuestionList");
 const subjectResultBox = document.getElementById("subjectResultBox");
+const subjectThreeView = document.getElementById("subjectThreeView");
+const subjectThreeQuestionList = document.getElementById("subjectThreeQuestionList");
+const subjectThreeResultBox = document.getElementById("subjectThreeResultBox");
+const subjectThreeWrongList = document.getElementById("subjectThreeWrongList");
+const subjectThreeError = document.getElementById("subjectThreeError");
 
 const startupBtn = document.getElementById("startupBtn");
 const shutdownBtn = document.getElementById("shutdownBtn");
 const subjectOneBtn = document.getElementById("subjectOneBtn");
+const subjectThreeBtn = document.getElementById("subjectThreeBtn");
 const backBtn = document.getElementById("backBtn");
 const restartBtn = document.getElementById("restartBtn");
 const clearBtn = document.getElementById("clearBtn");
@@ -130,6 +136,22 @@ const subjectBackBtn = document.getElementById("subjectBackBtn");
 const subjectRestartBtn = document.getElementById("subjectRestartBtn");
 const subjectClearBtn = document.getElementById("subjectClearBtn");
 const subjectConfirmBtn = document.getElementById("subjectConfirmBtn");
+const subjectThreeBackBtn = document.getElementById("subjectThreeBackBtn");
+const subjectThreeRestartBtn = document.getElementById("subjectThreeRestartBtn");
+const subjectThreeSubmitBtn = document.getElementById("subjectThreeSubmitBtn");
+const subjectThreeResetBtn = document.getElementById("subjectThreeResetBtn");
+const subjectThreeHomeBtn = document.getElementById("subjectThreeHomeBtn");
+const subjectThreeWrongOnlyBtn = document.getElementById("subjectThreeWrongOnlyBtn");
+
+let subjectThreeRendered = false;
+let subjectThreeWrongQuestions = [];
+let subjectThreeFilterWrongOnly = false;
+
+function bindClick(element, handler) {
+  if (element && typeof element.addEventListener === "function") {
+    element.addEventListener("click", handler);
+  }
+}
 
 function reportAppError(message, error) {
   console.error(message, error || "");
@@ -159,21 +181,32 @@ function getElementValue(id) {
 
 function focusElement(element) {
   if (element && typeof element.focus === "function") {
-    element.focus();
+    try {
+      element.focus({ preventScroll: true });
+    } catch (error) {
+      element.focus();
+    }
   }
 }
 
-startupBtn.addEventListener("click", () => startPractice("startup"));
-shutdownBtn.addEventListener("click", () => startPractice("shutdown"));
-subjectOneBtn.addEventListener("click", startSubjectOne);
-backBtn.addEventListener("click", showHome);
-restartBtn.addEventListener("click", restartPractice);
-clearBtn.addEventListener("click", clearAnswers);
-confirmBtn.addEventListener("click", confirmAnswers);
-subjectBackBtn.addEventListener("click", showHome);
-subjectRestartBtn.addEventListener("click", () => resetSubjectOne({ scroll: true }));
-subjectClearBtn.addEventListener("click", () => resetSubjectOne({ scroll: false }));
-subjectConfirmBtn.addEventListener("click", confirmSubjectOneAnswers);
+bindClick(startupBtn, () => startPractice("startup"));
+bindClick(shutdownBtn, () => startPractice("shutdown"));
+bindClick(subjectOneBtn, startSubjectOne);
+bindClick(subjectThreeBtn, startSubjectThree);
+bindClick(backBtn, showHome);
+bindClick(restartBtn, restartPractice);
+bindClick(clearBtn, clearAnswers);
+bindClick(confirmBtn, confirmAnswers);
+bindClick(subjectBackBtn, showHome);
+bindClick(subjectRestartBtn, () => resetSubjectOne({ scroll: true }));
+bindClick(subjectClearBtn, () => resetSubjectOne({ scroll: false }));
+bindClick(subjectConfirmBtn, confirmSubjectOneAnswers);
+bindClick(subjectThreeBackBtn, showHome);
+bindClick(subjectThreeRestartBtn, () => resetSubjectThree({ scroll: true }));
+bindClick(subjectThreeResetBtn, () => resetSubjectThree({ scroll: true }));
+bindClick(subjectThreeHomeBtn, showHome);
+bindClick(subjectThreeSubmitBtn, submitSubjectThreeAnswers);
+bindClick(subjectThreeWrongOnlyBtn, toggleSubjectThreeWrongOnly);
 
 initApp();
 
@@ -255,9 +288,14 @@ function showHome() {
   homeView.classList.remove("hidden");
   practiceView.classList.add("hidden");
   subjectOneView.classList.add("hidden");
+  if (subjectThreeView) {
+    subjectThreeView.classList.add("hidden");
+  }
   pageHint.textContent = "请选择练习类型";
   hideResult();
   hideSubjectResult();
+  hideSubjectThreeResult();
+  hideSubjectThreeError();
 
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
@@ -270,6 +308,9 @@ function startPractice(exerciseKey) {
 
   homeView.classList.add("hidden");
   subjectOneView.classList.add("hidden");
+  if (subjectThreeView) {
+    subjectThreeView.classList.add("hidden");
+  }
   practiceView.classList.remove("hidden");
   window.scrollTo({ top: 0, behavior: "smooth" });
 
@@ -1275,6 +1316,8 @@ function startSubjectOne() {
   currentExerciseKey = null;
   currentSession = null;
   hideResult();
+  hideSubjectThreeResult();
+  hideSubjectThreeError();
 
   if (!subjectOneRendered) {
     try {
@@ -1289,6 +1332,9 @@ function startSubjectOne() {
   resetSubjectOne({ scroll: false });
   homeView.classList.add("hidden");
   practiceView.classList.add("hidden");
+  if (subjectThreeView) {
+    subjectThreeView.classList.add("hidden");
+  }
   subjectOneView.classList.remove("hidden");
   pageHint.textContent = "科目一测量题";
   window.scrollTo({ top: 0, behavior: "smooth" });
@@ -1515,6 +1561,445 @@ function showSubjectResult(message, type, options = {}) {
 function hideSubjectResult() {
   subjectResultBox.textContent = "";
   subjectResultBox.className = "result-box hidden";
+}
+
+
+function startSubjectThree() {
+  closeModal({ force: true, restoreFocus: false });
+
+  currentExerciseKey = null;
+  currentSession = null;
+  hideResult();
+  hideSubjectResult();
+  hideSubjectThreeError();
+
+  try {
+    if (!subjectThreeRendered) {
+      renderSubjectThreeQuestions();
+      subjectThreeRendered = true;
+    }
+    resetSubjectThree({ scroll: false });
+  } catch (error) {
+    reportAppError("科目三页面初始化失败", error);
+    showSubjectThreeError("科目三页面初始化失败，请刷新页面或清除缓存后重新扫码。", { scroll: true });
+    return;
+  }
+
+  homeView.classList.add("hidden");
+  practiceView.classList.add("hidden");
+  subjectOneView.classList.add("hidden");
+  if (subjectThreeView) {
+    subjectThreeView.classList.remove("hidden");
+  }
+  pageHint.textContent = "科目三安全隐患排除题库";
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function getSubjectThreeQuestions() {
+  if (!Array.isArray(window.SUBJECT_THREE_QUESTIONS)) {
+    throw new Error("SUBJECT_THREE_QUESTIONS 未加载");
+  }
+  return window.SUBJECT_THREE_QUESTIONS;
+}
+
+function renderSubjectThreeQuestions() {
+  const questions = getSubjectThreeQuestions();
+  if (!subjectThreeQuestionList) {
+    throw new Error("subjectThreeQuestionList 不存在");
+  }
+
+  subjectThreeQuestionList.innerHTML = "";
+  const fragment = document.createDocumentFragment();
+
+  questions.forEach((question, index) => {
+    const article = document.createElement("article");
+    article.className = "subject-three-card";
+    article.id = "question-card-" + question.id;
+    article.setAttribute("data-question-id", question.id);
+
+    const fieldset = document.createElement("fieldset");
+    const legend = document.createElement("legend");
+    legend.textContent = (index + 1) + ". " + question.stem;
+    fieldset.appendChild(legend);
+
+    const meta = document.createElement("span");
+    meta.className = "subject-three-meta";
+    meta.textContent = getSubjectThreeTypeLabel(question.type);
+    fieldset.appendChild(meta);
+
+    if (question.type === "video") {
+      const videoNote = document.createElement("p");
+      videoNote.className = "subject-three-video-note";
+      videoNote.textContent = "视频题：请结合考试视频内容作答。本页面暂不强制加载视频资源。";
+      fieldset.appendChild(videoNote);
+    }
+
+    const optionsWrap = document.createElement("div");
+    optionsWrap.className = "subject-three-options";
+
+    question.options.forEach(option => {
+      optionsWrap.appendChild(createSubjectThreeOption(question, option));
+    });
+
+    fieldset.appendChild(optionsWrap);
+    article.appendChild(fieldset);
+    fragment.appendChild(article);
+  });
+
+  subjectThreeQuestionList.appendChild(fragment);
+}
+
+function createSubjectThreeOption(question, option) {
+  const inputId = "subject3-" + question.id + "-" + option.key;
+  const label = document.createElement("label");
+  label.className = "subject-three-option";
+  label.setAttribute("for", inputId);
+
+  const input = document.createElement("input");
+  input.id = inputId;
+  input.name = question.id;
+  input.type = question.type === "multi" ? "checkbox" : "radio";
+  input.value = option.key;
+  input.setAttribute("data-question-id", question.id);
+  input.addEventListener("change", clearSubjectThreeAnswerState);
+
+  const keyText = document.createElement("span");
+  keyText.className = "subject-three-option-key";
+  keyText.textContent = option.key + ".";
+
+  const optionText = document.createElement("span");
+  optionText.className = "subject-three-option-text";
+  optionText.textContent = option.text;
+
+  label.appendChild(input);
+  label.appendChild(keyText);
+  label.appendChild(optionText);
+  return label;
+}
+
+function getSubjectThreeTypeLabel(type) {
+  if (type === "multi") {
+    return "多选题";
+  }
+  if (type === "video") {
+    return "视频题";
+  }
+  return "单选/判断题";
+}
+
+function clearSubjectThreeAnswerState() {
+  hideSubjectThreeResult();
+  hideSubjectThreeError();
+  subjectThreeWrongQuestions = [];
+  subjectThreeFilterWrongOnly = false;
+  updateSubjectThreeWrongOnlyButton(false);
+  clearSubjectThreeFilter();
+
+  const questionId = this.getAttribute("data-question-id");
+  const card = document.getElementById("question-card-" + questionId);
+  if (card) {
+    card.classList.remove("question-unanswered");
+  }
+}
+
+function getSubjectThreeUserAnswers(question) {
+  const selector = 'input[data-question-id="' + question.id + '"]:checked';
+  const checkedInputs = subjectThreeQuestionList.querySelectorAll(selector);
+  return Array.from(checkedInputs).map(input => input.value).sort();
+}
+
+function validateSubjectThreeCompletion() {
+  const questions = getSubjectThreeQuestions();
+  const unanswered = [];
+  questions.forEach(question => {
+    const answers = getSubjectThreeUserAnswers(question);
+    const card = document.getElementById("question-card-" + question.id);
+    if (answers.length === 0) {
+      unanswered.push(question);
+      if (card) {
+        card.classList.add("question-unanswered");
+      }
+    } else if (card) {
+      card.classList.remove("question-unanswered");
+    }
+  });
+  return unanswered;
+}
+
+function submitSubjectThreeAnswers() {
+  if (!subjectThreeSubmitBtn) {
+    return;
+  }
+
+  subjectThreeSubmitBtn.disabled = true;
+  try {
+    const unanswered = validateSubjectThreeCompletion();
+    if (unanswered.length > 0) {
+      showSubjectThreeError("还有 " + unanswered.length + " 道题未作答", { scroll: false });
+      scrollToSubjectThreeQuestion(unanswered[0].id);
+      return;
+    }
+
+    const questions = getSubjectThreeQuestions();
+    const wrongQuestions = [];
+    let correctCount = 0;
+
+    questions.forEach(question => {
+      const userAnswers = getSubjectThreeUserAnswers(question);
+      const isCorrect = areSubjectThreeAnswersEqual(userAnswers, question.answer);
+      if (isCorrect) {
+        correctCount += 1;
+      } else {
+        wrongQuestions.push({ question: question, userAnswers: userAnswers });
+      }
+    });
+
+    subjectThreeWrongQuestions = wrongQuestions;
+    renderSubjectThreeResult(questions.length, correctCount, wrongQuestions.length);
+    renderSubjectThreeWrongQuestions(wrongQuestions);
+    updateSubjectThreeWrongOnlyButton(wrongQuestions.length > 0);
+    hideSubjectThreeError();
+    if (subjectThreeResultBox) {
+      subjectThreeResultBox.scrollIntoView({ behavior: "smooth", block: "start" });
+      focusElement(subjectThreeResultBox);
+    }
+  } catch (error) {
+    reportAppError("科目三提交失败", error);
+    showSubjectThreeError("科目三提交失败，请刷新页面后重试。", { scroll: true });
+  } finally {
+    subjectThreeSubmitBtn.disabled = false;
+  }
+}
+
+function areSubjectThreeAnswersEqual(userAnswers, standardAnswers) {
+  if (!Array.isArray(userAnswers) || !Array.isArray(standardAnswers)) {
+    return false;
+  }
+  if (userAnswers.length !== standardAnswers.length) {
+    return false;
+  }
+  const left = userAnswers.slice().sort();
+  const right = standardAnswers.slice().sort();
+  for (let index = 0; index < left.length; index += 1) {
+    if (left[index] !== right[index]) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function renderSubjectThreeResult(totalCount, correctCount, wrongCount) {
+  if (!subjectThreeResultBox) {
+    return;
+  }
+  const accuracy = totalCount > 0 ? Math.round((correctCount / totalCount) * 1000) / 10 : 0;
+  subjectThreeResultBox.innerHTML = "";
+  subjectThreeResultBox.className = wrongCount === 0 ? "subject-three-result" : "subject-three-result warning";
+
+  const title = document.createElement("div");
+  title.textContent = wrongCount === 0 ? "提交完成：全部正确。" : "提交完成：请查看错题详情。";
+  subjectThreeResultBox.appendChild(title);
+
+  const grid = document.createElement("div");
+  grid.className = "subject-three-summary-grid";
+  grid.appendChild(createSubjectThreeSummaryItem("总题数", String(totalCount)));
+  grid.appendChild(createSubjectThreeSummaryItem("正确题数", String(correctCount)));
+  grid.appendChild(createSubjectThreeSummaryItem("错误题数", String(wrongCount)));
+  grid.appendChild(createSubjectThreeSummaryItem("正确率", accuracy + "%"));
+  subjectThreeResultBox.appendChild(grid);
+}
+
+function createSubjectThreeSummaryItem(label, value) {
+  const item = document.createElement("div");
+  item.className = "subject-three-summary-item";
+  const labelEl = document.createElement("div");
+  labelEl.textContent = label;
+  const valueEl = document.createElement("strong");
+  valueEl.textContent = value;
+  item.appendChild(labelEl);
+  item.appendChild(valueEl);
+  return item;
+}
+
+function renderSubjectThreeWrongQuestions(wrongQuestions) {
+  if (!subjectThreeWrongList) {
+    return;
+  }
+  subjectThreeWrongList.innerHTML = "";
+  if (!wrongQuestions.length) {
+    subjectThreeWrongList.classList.add("hidden");
+    return;
+  }
+
+  const fragment = document.createDocumentFragment();
+  wrongQuestions.forEach(item => {
+    const question = item.question;
+    const card = document.createElement("article");
+    card.className = "subject-three-wrong-card";
+
+    const title = document.createElement("h3");
+    title.textContent = "错题：" + getSubjectThreeDisplayNumber(question.id) + "（" + getSubjectThreeTypeLabel(question.type) + "）";
+    card.appendChild(title);
+
+    card.appendChild(createSubjectThreeWrongLine("题目", question.stem, ""));
+    card.appendChild(createSubjectThreeWrongLine("用户选择", formatSubjectThreeAnswerText(question, item.userAnswers), ""));
+    card.appendChild(createSubjectThreeWrongLine("正确答案", question.answer.join("、"), "subject-three-correct-answer"));
+    card.appendChild(createSubjectThreeWrongLine("正确选项文本", formatSubjectThreeAnswerText(question, question.answer), "subject-three-correct-answer"));
+
+    fragment.appendChild(card);
+  });
+
+  subjectThreeWrongList.appendChild(fragment);
+  subjectThreeWrongList.classList.remove("hidden");
+}
+
+function createSubjectThreeWrongLine(label, value, className) {
+  const line = document.createElement("p");
+  const strong = document.createElement("strong");
+  strong.textContent = label + "：";
+  const text = document.createElement("span");
+  if (className) {
+    text.className = className;
+  }
+  text.textContent = value;
+  line.appendChild(strong);
+  line.appendChild(text);
+  return line;
+}
+
+function getSubjectThreeDisplayNumber(questionId) {
+  const questions = getSubjectThreeQuestions();
+  for (let index = 0; index < questions.length; index += 1) {
+    if (questions[index].id === questionId) {
+      return String(index + 1);
+    }
+  }
+  return questionId;
+}
+
+function formatSubjectThreeAnswerText(question, keys) {
+  if (!keys || !keys.length) {
+    return "未选择";
+  }
+  return keys.map(key => {
+    const option = question.options.find(item => item.key === key);
+    return key + ". " + (option ? option.text : "");
+  }).join("；");
+}
+
+function resetSubjectThree(options = {}) {
+  const scroll = options.scroll === true;
+  try {
+    if (subjectThreeQuestionList) {
+      const inputs = subjectThreeQuestionList.querySelectorAll("input");
+      inputs.forEach(input => {
+        input.checked = false;
+      });
+      const cards = subjectThreeQuestionList.querySelectorAll(".subject-three-card");
+      cards.forEach(card => {
+        card.classList.remove("question-unanswered");
+        card.classList.remove("correct-filtered");
+      });
+    }
+
+    subjectThreeWrongQuestions = [];
+    subjectThreeFilterWrongOnly = false;
+    updateSubjectThreeWrongOnlyButton(false);
+    hideSubjectThreeResult();
+    hideSubjectThreeError();
+
+    if (scroll) {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  } catch (error) {
+    reportAppError("科目三重置失败", error);
+    showSubjectThreeError("科目三重置失败，请刷新页面后重试。", { scroll: true });
+  }
+}
+
+function showSubjectThreeError(message, options = {}) {
+  const scroll = options.scroll === true;
+  if (!subjectThreeError) {
+    return;
+  }
+  subjectThreeError.textContent = message;
+  subjectThreeError.classList.remove("hidden");
+  if (scroll) {
+    subjectThreeError.scrollIntoView({ behavior: "smooth", block: "center" });
+    focusElement(subjectThreeError);
+  }
+}
+
+function hideSubjectThreeError() {
+  if (!subjectThreeError) {
+    return;
+  }
+  subjectThreeError.textContent = "";
+  subjectThreeError.classList.add("hidden");
+}
+
+function hideSubjectThreeResult() {
+  if (subjectThreeResultBox) {
+    subjectThreeResultBox.innerHTML = "";
+    subjectThreeResultBox.className = "subject-three-result hidden";
+  }
+  if (subjectThreeWrongList) {
+    subjectThreeWrongList.innerHTML = "";
+    subjectThreeWrongList.className = "subject-three-wrong-list hidden";
+  }
+}
+
+function scrollToSubjectThreeQuestion(questionId) {
+  const card = document.getElementById("question-card-" + questionId);
+  if (!card) {
+    return;
+  }
+  card.scrollIntoView({ behavior: "smooth", block: "center" });
+  const input = card.querySelector("input");
+  window.setTimeout(() => focusElement(input), 180);
+}
+
+function updateSubjectThreeWrongOnlyButton(shouldShow) {
+  if (!subjectThreeWrongOnlyBtn) {
+    return;
+  }
+  if (shouldShow) {
+    subjectThreeWrongOnlyBtn.classList.remove("hidden");
+    subjectThreeWrongOnlyBtn.textContent = subjectThreeFilterWrongOnly ? "显示全部" : "只看错题";
+  } else {
+    subjectThreeWrongOnlyBtn.classList.add("hidden");
+    subjectThreeWrongOnlyBtn.textContent = "只看错题";
+  }
+}
+
+function toggleSubjectThreeWrongOnly() {
+  if (!subjectThreeWrongQuestions.length) {
+    return;
+  }
+  subjectThreeFilterWrongOnly = !subjectThreeFilterWrongOnly;
+  const wrongIds = subjectThreeWrongQuestions.map(item => item.question.id);
+  const cards = subjectThreeQuestionList.querySelectorAll(".subject-three-card");
+  cards.forEach(card => {
+    const questionId = card.getAttribute("data-question-id");
+    const isWrong = wrongIds.indexOf(questionId) !== -1;
+    if (subjectThreeFilterWrongOnly && !isWrong) {
+      card.classList.add("correct-filtered");
+    } else {
+      card.classList.remove("correct-filtered");
+    }
+  });
+  updateSubjectThreeWrongOnlyButton(true);
+  if (subjectThreeFilterWrongOnly && subjectThreeWrongQuestions.length) {
+    scrollToSubjectThreeQuestion(subjectThreeWrongQuestions[0].question.id);
+  }
+}
+
+function clearSubjectThreeFilter() {
+  if (!subjectThreeQuestionList) {
+    return;
+  }
+  const cards = subjectThreeQuestionList.querySelectorAll(".subject-three-card");
+  cards.forEach(card => card.classList.remove("correct-filtered"));
 }
 
 function shuffle(array) {

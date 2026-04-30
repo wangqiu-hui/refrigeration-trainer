@@ -1,8 +1,8 @@
 {
   "name": "制冷装置操作顺序练习软件",
   "short_name": "制冷练习",
-  "description": "用于训练制冷装置开机、停机操作顺序和科目一测量题的手机练习软件。",
-  "start_url": "./index.html?v=20260430-mobile-primary-v11-fixed-mobile",
+  "description": "用于训练制冷装置开机、停机操作顺序、科目一测量题和科目三安全隐患排除题库的手机练习软件。",
+  "start_url": "./index.html?v=20260501-subject3-mobile-v12",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait-primary",

@@ -1,4 +1,4 @@
-const APP_VERSION = "20260430-mobile-primary-v11-fixed-mobile";
+const APP_VERSION = "20260501-subject3-mobile-v12";
 const CACHE_NAME = `refrigeration-trainer-mobile-${APP_VERSION}`;
 
 const CORE_ASSETS = [
@@ -6,6 +6,7 @@ const CORE_ASSETS = [
   "./index.html",
   `./style.css?v=${APP_VERSION}`,
   `./app.js?v=${APP_VERSION}`,
+  `./subject3-data.js?v=${APP_VERSION}`,
   `./steps.json?v=${APP_VERSION}`,
   `./manifest.webmanifest?v=${APP_VERSION}`,
   "./icons/icon-192.png",
@@ -17,6 +18,7 @@ const NETWORK_FIRST_SUFFIXES = [
   "/index.html",
   "/style.css",
   "/app.js",
+  "/subject3-data.js",
   "/steps.json",
   "/manifest.webmanifest"
 ];

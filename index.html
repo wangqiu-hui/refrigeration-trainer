@@ -4,12 +4,12 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#1769aa" />
-  <meta name="description" content="用于训练制冷装置开机、停机操作顺序和科目一测量题的手机练习软件" />
+  <meta name="description" content="用于训练制冷装置开机、停机操作顺序、科目一测量题和科目三安全隐患排除题库的手机练习软件" />
 
   <title>制冷装置操作顺序练习软件</title>
 
-  <link rel="stylesheet" href="style.css?v=20260430-mobile-primary-v11-fixed-mobile" />
-  <link rel="manifest" href="manifest.webmanifest?v=20260430-mobile-primary-v11-fixed-mobile" />
+  <link rel="stylesheet" href="style.css?v=20260501-subject3-mobile-v12" />
+  <link rel="manifest" href="manifest.webmanifest?v=20260501-subject3-mobile-v12" />
   <link rel="icon" href="icons/icon-192.png" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
 </head>
@@ -28,12 +28,13 @@
     <main>
       <section id="homeView" class="view card home-card">
         <h2>选择练习</h2>
-        <p class="muted">开机练习、停机练习会随机打乱 8 个步骤；科目一进入独立测量题页面。手机端已使用移动端优先触控布局，适合竖屏扫码练习和 PWA 添加到主屏幕后使用。</p>
+        <p class="muted">开机练习、停机练习会随机打乱 8 个步骤；科目一进入独立测量题页面；科目三进入安全隐患排除题库。手机端已使用移动端优先触控布局，适合竖屏扫码练习和 PWA 添加到主屏幕后使用。</p>
 
         <div class="home-actions">
           <button type="button" class="primary-btn" id="startupBtn">开机练习</button>
           <button type="button" class="primary-btn secondary" id="shutdownBtn">停机练习</button>
           <button type="button" class="primary-btn subject-entry" id="subjectOneBtn">科目一</button>
+          <button type="button" class="primary-btn subject-three-entry" id="subjectThreeBtn">科目三</button>
         </div>
 
         <div class="notice">
@@ -98,6 +99,34 @@
 
         <section id="subjectResultBox" class="result-box hidden" role="status"></section>
       </section>
+
+      <section id="subjectThreeView" class="view hidden subject-three-view" aria-live="polite">
+        <div class="top-toolbar subject-toolbar">
+          <button type="button" id="subjectThreeBackBtn">返回主界面</button>
+          <button type="button" id="subjectThreeRestartBtn">重新练习</button>
+        </div>
+
+        <section class="card practice-title-card subject-title-card">
+          <div>
+            <h2>科目三：制冷运行安全隐患排除题库</h2>
+            <p class="muted">题库包含单选/判断题、多选题和视频题。提交前不会显示正确答案；视频题暂不加载视频文件，请结合考试视频内容作答。</p>
+          </div>
+          <span class="round-badge">题库练习</span>
+        </section>
+
+        <section id="subjectThreeError" class="subject-three-error hidden" role="alert"></section>
+        <div id="subjectThreeQuestionList" class="subject-three-question-list"></div>
+
+        <section class="card subject-three-actions" aria-label="科目三操作区">
+          <button type="button" class="confirm-btn" id="subjectThreeSubmitBtn">提交答案</button>
+          <button type="button" id="subjectThreeWrongOnlyBtn" class="hidden">只看错题</button>
+          <button type="button" id="subjectThreeResetBtn">重新练习</button>
+          <button type="button" id="subjectThreeHomeBtn">返回首页</button>
+        </section>
+
+        <section id="subjectThreeResultBox" class="subject-three-result hidden" role="status" aria-live="polite" tabindex="-1"></section>
+        <section id="subjectThreeWrongList" class="subject-three-wrong-list hidden" aria-live="polite"></section>
+      </section>
     </main>
 
     <footer class="footer">
@@ -112,7 +141,7 @@
 
   <noscript>
     <div class="boot-error">
-      当前浏览器禁用了 JavaScript，练习按钮和弹窗无法工作。请开启 JavaScript 后重新打开。
+      当前浏览器禁用了 JavaScript，练习按钮、弹窗和科目三题库无法工作。请开启 JavaScript 后重新打开。
     </div>
   </noscript>
 
@@ -155,6 +184,7 @@
       });
     }());
   </script>
-  <script src="app.js?v=20260430-mobile-primary-v11-fixed-mobile" defer></script>
+  <script src="subject3-data.js?v=20260501-subject3-mobile-v12" defer></script>
+  <script src="app.js?v=20260501-subject3-mobile-v12" defer></script>
 </body>
 </html>
