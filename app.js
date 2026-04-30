@@ -1,6 +1,6 @@
 const LETTERS = ["A", "B", "C", "D", "E", "F", "G", "H"];
 const STEP_COUNT = LETTERS.length;
-const ASSET_VERSION = "20260430-sequential-fill-fix";
+const ASSET_VERSION = "20260430-mobile-tap-reliability-v6";
 
 const FALLBACK_EXERCISES = {
   startup: {
@@ -37,6 +37,11 @@ let currentSession = null;
 let roundNumber = 0;
 let activeAnswerIndex = 0;
 let activeAnswerSource = "auto";
+let optionPointerStart = null;
+let lastOptionActivation = { letter: "", time: 0, source: "" };
+
+const TAP_MOVE_TOLERANCE_PX = 24;
+const DUPLICATE_TAP_GUARD_MS = 650;
 
 const homeView = document.getElementById("homeView");
 const practiceView = document.getElementById("practiceView");
@@ -132,6 +137,7 @@ function showHome() {
   roundNumber = 0;
   activeAnswerIndex = 0;
   activeAnswerSource = "auto";
+  lastOptionActivation = { letter: "", time: 0, source: "" };
 
   homeView.classList.remove("hidden");
   practiceView.classList.add("hidden");
@@ -180,6 +186,7 @@ function newRound() {
   roundNumber += 1;
   activeAnswerIndex = 0;
   activeAnswerSource = "auto";
+  lastOptionActivation = { letter: "", time: 0, source: "" };
   currentSession = {
     title: exercise.title,
     optionMap,
@@ -214,7 +221,7 @@ function renderOptions() {
       "aria-label",
       `选择 ${letter}，填入当前高亮的作答步骤。${currentSession.optionMap[letter]}`
     );
-    item.addEventListener("click", handleOptionClick);
+    bindOptionActivationEvents(item);
 
     const letterEl = document.createElement("span");
     letterEl.className = "option-letter";
@@ -229,11 +236,139 @@ function renderOptions() {
   }
 }
 
-function handleOptionClick(event) {
-  const optionButton = event.currentTarget;
-  const letter = optionButton.dataset.letter;
+function bindOptionActivationEvents(optionButton) {
+  if (window.PointerEvent) {
+    optionButton.addEventListener("pointerdown", handleOptionPointerDown, { passive: true });
+    optionButton.addEventListener("pointerup", handleOptionPointerUp);
+    optionButton.addEventListener("pointercancel", clearOptionPointerStart);
+    optionButton.addEventListener("lostpointercapture", clearOptionPointerStart);
+  } else {
+    optionButton.addEventListener("touchstart", handleOptionTouchStart, { passive: true });
+    optionButton.addEventListener("touchend", handleOptionTouchEnd, { passive: false });
+    optionButton.addEventListener("touchcancel", clearOptionPointerStart);
+  }
 
+  // click 作为桌面端和个别旧浏览器的兜底。移动端 pointerup/touchend 后会产生合成 click，
+  // activateOptionButton 内部会去重，避免一次点击填两次。
+  optionButton.addEventListener("click", handleOptionClick);
+}
+
+function handleOptionPointerDown(event) {
+  if (!event.isPrimary || event.button > 0) {
+    return;
+  }
+
+  optionPointerStart = {
+    button: event.currentTarget,
+    pointerId: event.pointerId,
+    x: event.clientX,
+    y: event.clientY
+  };
+}
+
+function handleOptionPointerUp(event) {
+  if (!event.isPrimary || event.button > 0) {
+    return;
+  }
+
+  const optionButton = event.currentTarget;
+  const isSamePointer = optionPointerStart && optionPointerStart.pointerId === event.pointerId;
+  const isTap = isSamePointer && isTapWithinTolerance(optionButton, event.clientX, event.clientY);
+  clearOptionPointerStart();
+
+  if (!isTap) {
+    return;
+  }
+
+  event.preventDefault();
+  activateOptionButton(optionButton, "pointer");
+}
+
+function handleOptionTouchStart(event) {
+  const touch = event.changedTouches && event.changedTouches[0];
+  if (!touch) {
+    return;
+  }
+
+  optionPointerStart = {
+    button: event.currentTarget,
+    pointerId: touch.identifier,
+    x: touch.clientX,
+    y: touch.clientY
+  };
+}
+
+function handleOptionTouchEnd(event) {
+  if (window.PointerEvent) {
+    return;
+  }
+
+  const touch = event.changedTouches && event.changedTouches[0];
+  if (!touch) {
+    return;
+  }
+
+  const optionButton = event.currentTarget;
+  const isSamePointer = optionPointerStart && optionPointerStart.pointerId === touch.identifier;
+  const isTap = isSamePointer && isTapWithinTolerance(optionButton, touch.clientX, touch.clientY);
+  clearOptionPointerStart();
+
+  if (!isTap) {
+    return;
+  }
+
+  event.preventDefault();
+  activateOptionButton(optionButton, "touch");
+}
+
+function handleOptionClick(event) {
+  activateOptionButton(event.currentTarget, "click");
+}
+
+function activateOptionButton(optionButton, source = "click") {
+  if (!optionButton || !optionButton.dataset) {
+    return;
+  }
+
+  const letter = optionButton.dataset.letter;
+  if (!letter) {
+    return;
+  }
+
+  const now = getNow();
+  const isSyntheticClickAfterTouch = source === "click"
+    && lastOptionActivation.source !== "click"
+    && lastOptionActivation.letter === letter
+    && now - lastOptionActivation.time < DUPLICATE_TAP_GUARD_MS;
+
+  if (isSyntheticClickAfterTouch) {
+    return;
+  }
+
+  lastOptionActivation = { letter, time: now, source };
   chooseOptionLetter(letter);
+}
+
+function isTapWithinTolerance(optionButton, clientX, clientY) {
+  if (!optionPointerStart || optionPointerStart.button !== optionButton) {
+    return false;
+  }
+
+  const movedX = Math.abs(clientX - optionPointerStart.x);
+  const movedY = Math.abs(clientY - optionPointerStart.y);
+  return movedX <= TAP_MOVE_TOLERANCE_PX && movedY <= TAP_MOVE_TOLERANCE_PX;
+}
+
+function clearOptionPointerStart() {
+  optionPointerStart = null;
+}
+
+function getNow() {
+  if (window.performance && typeof window.performance.now === "function") {
+    return window.performance.now();
+  }
+
+  return Date.now();
 }
 
 function chooseOptionLetter(letter) {
@@ -259,8 +394,8 @@ function chooseOptionLetter(letter) {
     const existingStepNumber = existingIndex + 1;
 
     updateOptionSelectedStates();
-    showResult(`选项 ${letter} 已在第 ${existingStepNumber} 步使用；如需移动，请先点击目标步骤`, "warning");
-    flashAnswerCell(existingSelect, { scroll: true });
+    showResult(`选项 ${letter} 已在第 ${existingStepNumber} 步使用；如需移动，请先点击目标步骤`, "warning", { scroll: false });
+    flashAnswerCell(existingSelect, { scroll: false });
     return;
   }
 
@@ -275,7 +410,7 @@ function chooseOptionLetter(letter) {
   targetSelect.closest(".answer-cell")?.classList.add("manual-filled");
 
   updateOptionSelectedStates();
-  flashAnswerCell(targetSelect, { scroll: true });
+  flashAnswerCell(targetSelect, { scroll: false });
 
   const nextEmptyIndex = findNextEmptyIndex(targetIndex + 1, selects);
   setActiveAnswerIndex(nextEmptyIndex ?? targetIndex, { source: "auto", scroll: false, focus: false });
@@ -469,6 +604,7 @@ function clearAnswers() {
   }
 
   setActiveAnswerIndex(0, { source: "auto", scroll: false, focus: false });
+  lastOptionActivation = { letter: "", time: 0, source: "" };
   updateOptionSelectedStates();
   hideResult();
 }

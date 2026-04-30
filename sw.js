@@ -1,4 +1,4 @@
-const APP_VERSION = "20260430-sequential-fill-fix";
+const APP_VERSION = "20260430-mobile-tap-reliability-v6";
 const CACHE_NAME = `refrigeration-trainer-mobile-${APP_VERSION}`;
 
 const CORE_ASSETS = [
