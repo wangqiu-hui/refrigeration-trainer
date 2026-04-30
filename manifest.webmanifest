@@ -1,0 +1,25 @@
+{
+  "name": "制冷装置操作顺序练习软件",
+  "short_name": "制冷练习",
+  "description": "用于训练制冷装置开机和停机操作顺序的手机练习软件",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#eef4f8",
+  "theme_color": "#1769aa",
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
